@@ -13,9 +13,11 @@ It adds 2 new commands to your Twitch chat
 ``!wip (url)``  
 this command can be used by anyone to request a wip. url should be a direct download link to a zip file (has to start with https:// and end with .zip). easiest way to host files is to upload it anywhere on discord, right click the download button and click "Copy Link" (NOT "Copy Message Link")
 
-after someone has requested a wip, press the "Download WIP" button in the mods panel on the left in the main menu in beat saber. after it has finished downloading press "Reload Playlists" so it actually shows up in the WIP playlist
+after someone has requested a wip, press the "Download WIP" button in the mods panel on the left in the main menu in beat saber. after it has finished downloading press "Refresh Playlists" so it actually shows up in the WIP playlist
 
+![image](https://user-images.githubusercontent.com/45233053/176416266-ef201bb7-a8da-4c1f-a273-7a4e9b57b52f.png)
 
+# 
 
 there is also a secret second command that only the streamer can use
 
