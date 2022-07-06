@@ -80,11 +80,21 @@ namespace wipbot
                     Directory.Delete(path + folderName, true);
                 ZipFile.ExtractToDirectory(path + folderName + ".zip", path + folderName);
                 File.Delete(path + folderName + ".zip");
-                sslStream.Write(Encoding.UTF8.GetBytes("PRIVMSG #" + channelName + " :Download successful\r\n"));
+                if (!File.Exists(path + folderName + "\\info.dat"))
+                {
+                    sslStream.Write(Encoding.UTF8.GetBytes("PRIVMSG #" + channelName + " :! WIP missing info.dat (make sure the .zip doesn't contain folders)\r\n"));
+                    Directory.Delete(path + folderName, true);
+                    return;
+                }
+                SongCore.Loader.Instance.RefreshSongs(false);
+                sslStream.Write(Encoding.UTF8.GetBytes("PRIVMSG #" + channelName + " :! WIP download successful\r\n"));
             }
-            catch (System.Net.WebException e)
+            catch (Exception e)
             {
-                sslStream.Write(Encoding.UTF8.GetBytes("PRIVMSG #" + channelName + " :Download failed\r\n"));
+                if (e is WebException)
+                    sslStream.Write(Encoding.UTF8.GetBytes("PRIVMSG #" + channelName + " :! WIP download failed\r\n"));
+                else
+                    sslStream.Write(Encoding.UTF8.GetBytes("PRIVMSG #" + channelName + " :! WIP extraction failed\r\n"));
             }
         }
 
@@ -92,7 +102,7 @@ namespace wipbot
         {
             if(wipUrl == "")
             {
-                sslStream.Write(Encoding.UTF8.GetBytes("PRIVMSG #" + channelName + " :No WIP url set\r\n"));
+                sslStream.Write(Encoding.UTF8.GetBytes("PRIVMSG #" + channelName + " :! WIP not requested\r\n"));
                 return;
             }
             string[] urlSplit = wipUrl.Split('/');
@@ -178,12 +188,12 @@ namespace wipbot
                         {
                             if (msgSplit.Length != 2 || msgSplit[1].IndexOf("https://") == -1 || msgSplit[1].IndexOf(".zip") == -1)
                             {
-                                sslStream.Write(Encoding.UTF8.GetBytes("PRIVMSG #" + channelName + " :invalid url (must be a direct link to a .zip)\r\n"));
+                                sslStream.Write(Encoding.UTF8.GetBytes("PRIVMSG #" + channelName + " :! WIP url invalid (must start with https:// and end with .zip)\r\n"));
                             }
                             else
                             {
                                 wipUrl = msgSplit[1];
-                                sslStream.Write(Encoding.UTF8.GetBytes("PRIVMSG #" + channelName + " :WIP requested\r\n"));
+                                sslStream.Write(Encoding.UTF8.GetBytes("PRIVMSG #" + channelName + " :! WIP requested\r\n"));
                             }
                         }
                         if (msgSplit[0] == "!bsrdl" && sender == channelName)
