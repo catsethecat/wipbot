@@ -34,6 +34,11 @@ namespace wipbot
         internal static Plugin Instance { get; private set; }
         internal static IPALogger Log { get; private set; }
 
+        SslStream sslStream;
+        string channelName;
+        string oauthToken;
+        string wipUrl;
+
 
         [Init]
         public Plugin(IPALogger logger)
@@ -57,7 +62,7 @@ namespace wipbot
 
         }
 
-        static string[] GetStringsBetweenStrings(string str, string start, string end)
+        private static string[] GetStringsBetweenStrings(string str, string start, string end)
         {
             List<string> list = new List<string>();
             for (int found = str.IndexOf(start); found > 0; found = str.IndexOf(start, found + 1))
@@ -70,7 +75,12 @@ namespace wipbot
             return list.ToArray();
         }
 
-        internal void DownloadAndExtractZip(string url, string path, string folderName)
+        private void SendMessage(string msg)
+        {
+            sslStream.Write(Encoding.UTF8.GetBytes("PRIVMSG #" + channelName + " :! " + msg + "\r\n"));
+        }
+
+        private void DownloadAndExtractZip(string url, string path, string folderName)
         {
             WebClient webClient = new WebClient();
             try
@@ -82,39 +92,49 @@ namespace wipbot
                 File.Delete(path + folderName + ".zip");
                 if (!File.Exists(path + folderName + "\\info.dat"))
                 {
-                    sslStream.Write(Encoding.UTF8.GetBytes("PRIVMSG #" + channelName + " :! WIP missing info.dat (make sure the .zip doesn't contain folders)\r\n"));
-                    Directory.Delete(path + folderName, true);
-                    return;
+                    string[] dirs = Directory.GetDirectories(path + folderName);
+                    if (dirs.Length == 1 && File.Exists(dirs[0] + "\\info.dat"))
+                    {
+                        Directory.Move(dirs[0], path + folderName + "_tmp");
+                        Directory.Delete(path + folderName, true);
+                        Directory.Move(path + folderName + "_tmp", path + folderName);
+                    }
+                    else
+                    {
+                        SendMessage("WIP missing info.dat");
+                        Directory.Delete(path + folderName, true);
+                        return;
+                    }
                 }
                 SongCore.Loader.Instance.RefreshSongs(false);
-                sslStream.Write(Encoding.UTF8.GetBytes("PRIVMSG #" + channelName + " :! WIP download successful\r\n"));
+                SendMessage("WIP download successful");
             }
             catch (Exception e)
             {
                 if (e is WebException)
-                    sslStream.Write(Encoding.UTF8.GetBytes("PRIVMSG #" + channelName + " :! WIP download failed\r\n"));
+                    SendMessage("WIP download failed");
                 else
-                    sslStream.Write(Encoding.UTF8.GetBytes("PRIVMSG #" + channelName + " :! WIP extraction failed\r\n"));
+                    SendMessage("WIP extraction failed");
             }
         }
 
-        internal void DownloadButtonPressed()
+        private void DownloadButtonPressed()
         {
-            if(wipUrl == "")
+            if(wipUrl == null)
             {
-                sslStream.Write(Encoding.UTF8.GetBytes("PRIVMSG #" + channelName + " :! WIP not requested\r\n"));
+                SendMessage("WIP not requested");
                 return;
             }
             string[] urlSplit = wipUrl.Split('/');
-            DownloadAndExtractZip(wipUrl, "Beat Saber_Data\\CustomWIPLevels\\", urlSplit[urlSplit.Length-1].Split('.')[0]);
+            if (urlSplit[2] == "drive.google.com")
+                DownloadAndExtractZip("https://drive.google.com/uc?id=" + urlSplit[5] + "&export=download", "Beat Saber_Data\\CustomWIPLevels\\", urlSplit[5]);
+            else
+                DownloadAndExtractZip(wipUrl, "Beat Saber_Data\\CustomWIPLevels\\", urlSplit[urlSplit.Length - 1].Split('.')[0]);
         }
 
-        SslStream sslStream;
-        string channelName = "";
-        string oauthToken = "";
-        string wipUrl = "";
+        
 
-        public void ChatThread()
+        private void ChatThread()
         {
             
 
@@ -140,6 +160,7 @@ namespace wipbot
 
             while (true)
             {
+                Thread.Sleep(1000);
 
                 TcpClient client = new TcpClient("irc.chat.twitch.tv", 6697);
 
@@ -150,7 +171,7 @@ namespace wipbot
                 }
                 catch (AuthenticationException e)
                 {
-                    return;
+                    continue;
                 }
 
                 sslStream.Write(Encoding.UTF8.GetBytes("PASS " + oauthToken + "\r\n"));
@@ -163,7 +184,6 @@ namespace wipbot
                 if (res == 0 || Encoding.UTF8.GetString(buf, 0, res).IndexOf("Welcome, GLHF!") == -1)
                 {
                     //Plugin.Log.Info("Login failed");
-                    Thread.Sleep(1000);
                     continue;
                 }
 
@@ -186,14 +206,14 @@ namespace wipbot
                         string[] msgSplit = msg.Split(' ');
                         if (msgSplit[0] == "!wip")
                         {
-                            if (msgSplit.Length != 2 || msgSplit[1].IndexOf("https://") == -1 || msgSplit[1].IndexOf(".zip") == -1)
+                            if (msgSplit.Length != 2 || (msgSplit[1].IndexOf("https://cdn.discordapp.com/") == -1 && msgSplit[1].IndexOf("https://drive.google.com/file/d/") == -1))
                             {
-                                sslStream.Write(Encoding.UTF8.GetBytes("PRIVMSG #" + channelName + " :! WIP url invalid (must start with https:// and end with .zip)\r\n"));
+                                SendMessage("WIP url invalid. To request a WIP, upload the .zip anywhere on discord or on google drive, copy the download link and use the command !wip (link)");
                             }
                             else
                             {
                                 wipUrl = msgSplit[1];
-                                sslStream.Write(Encoding.UTF8.GetBytes("PRIVMSG #" + channelName + " :! WIP requested\r\n"));
+                                SendMessage("WIP requested");
                             }
                         }
                         if (msgSplit[0] == "!bsrdl" && sender == channelName)
@@ -208,7 +228,6 @@ namespace wipbot
                 }
 
                 //Plugin.Log.Info("Receive failed, reconnecting...\n");
-                Thread.Sleep(1000);
 
             }
         }
