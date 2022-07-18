@@ -11,7 +11,7 @@ this one is as simple as it gets. just drop it into your plugins folder and your
 It adds 2 new commands to your Twitch chat
 
 ``!wip (url)``  
-this command can be used by anyone to request a wip. url should be a direct download link to a zip file (has to start with https:// and end with .zip). easiest way to host files is to upload it anywhere on discord, right click the download button and click "Copy Link" (NOT "Copy Message Link")
+this command can be used by anyone to request a wip. url should be a direct download link to a .zip file hosted on discord or google drive.
 
 after someone has requested a wip, press the "Download WIP" button in the mods panel and the map should show up in the WIP playlist
 
