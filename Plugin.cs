@@ -206,13 +206,15 @@ namespace wipbot
                         string[] msgSplit = msg.Split(' ');
                         if (msgSplit[0] == "!wip")
                         {
-                            if (msgSplit.Length != 2 || (msgSplit[1].IndexOf("https://cdn.discordapp.com/") == -1 && msgSplit[1].IndexOf("https://drive.google.com/file/d/") == -1))
+                            if (msgSplit.Length != 2 || (msgSplit[1].IndexOf(".") != -1 && msgSplit[1].IndexOf("https://cdn.discordapp.com/") == -1 && msgSplit[1].IndexOf("https://drive.google.com/file/d/") == -1))
                             {
-                                SendMessage("WIP url invalid. To request a WIP, upload the .zip anywhere on discord or on google drive, copy the download link and use the command !wip (link)");
+                                SendMessage("Invalid request. To request a WIP, go to http://catse.net/wip or upload the .zip anywhere on discord or on google drive, copy the download link and use the command !wip (link)");
                             }
                             else
                             {
                                 wipUrl = msgSplit[1];
+                                if (msgSplit[1].IndexOf(".") == -1)
+                                    wipUrl = "http://catse.net/wips/" + msgSplit[1] + ".zip";
                                 SendMessage("WIP requested");
                             }
                         }
