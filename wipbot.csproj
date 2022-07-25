@@ -9,9 +9,10 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>wipbot</RootNamespace>
     <AssemblyName>wipbot</AssemblyName>
-    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
+    <TargetFrameworkProfile />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -91,6 +92,10 @@
     </Reference>
     <Reference Include="SongCore">
       <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Beat Saber\Plugins\SongCore.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="BeatSaberPlus">
+      <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Beat Saber\Plugins\BeatSaberPlus.dll</HintPath>
       <Private>False</Private>
     </Reference>
   </ItemGroup>

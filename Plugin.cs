@@ -34,9 +34,7 @@ namespace wipbot
         internal static Plugin Instance { get; private set; }
         internal static IPALogger Log { get; private set; }
 
-        SslStream sslStream;
-        string channelName;
-        string oauthToken;
+        BeatSaberPlus.SDK.Chat.Services.ChatServiceMultiplexer mux;
         string wipUrl;
 
 
@@ -52,14 +50,48 @@ namespace wipbot
         {
             MenuButton testBtn = new MenuButton("Download WIP", "", DownloadButtonPressed, true);
             MenuButtons.instance.RegisterButton(testBtn);
-            Thread t = new Thread(new ThreadStart(ChatThread));
-            t.Start();
+
+            BeatSaberPlus.SDK.Chat.Service.Acquire();
+            mux = BeatSaberPlus.SDK.Chat.Service.Multiplexer;
+            mux.OnTextMessageReceived += OnMessageReceived;
         }
 
         [OnExit]
         public void OnApplicationQuit()
         {
 
+        }
+
+        void OnMessageReceived(BeatSaberPlus.SDK.Chat.Interfaces.IChatService service, BeatSaberPlus.SDK.Chat.Interfaces.IChatMessage msg)
+        {
+            string[] msgSplit = msg.Message.Split(' ');
+            if (msgSplit[0].ToLower().StartsWith("!wip"))
+            {
+                if (msgSplit.Length != 2 || (msgSplit[1].IndexOf(".") != -1 && msgSplit[1].StartsWith("https://cdn.discordapp.com/") == false && msgSplit[1].StartsWith("https://drive.google.com/file/d/") == false))
+                {
+                    SendMessage("Invalid request. To request a WIP, go to http://catse.net/wip or upload the .zip anywhere on discord or on google drive, copy the download link and use the command !wip (link)");
+                }
+                else
+                {
+                    wipUrl = msgSplit[1];
+                    if (msgSplit[1].IndexOf(".") == -1)
+                        wipUrl = "http://catse.net/wips/" + msgSplit[1] + ".zip";
+                    SendMessage("WIP requested");
+                }
+            }
+            if (msgSplit[0].ToLower().StartsWith("!bsrdl") && msg.Sender.IsBroadcaster)
+            {
+                WebClient webClient = new WebClient();
+                string songInfo = webClient.DownloadString("https://beatsaver.com/api/maps/id/" + msgSplit[1]);
+                string fileNameNoExt = msgSplit[1] + " (" + GetStringsBetweenStrings(songInfo, "\"songName\": \"", "\"")[0] + " - " + GetStringsBetweenStrings(songInfo, "\"levelAuthorName\": \"", "\"")[0] + ")";
+                string downloadUrl = GetStringsBetweenStrings(songInfo, "\"downloadURL\": \"", "\"")[0];
+                DownloadAndExtractZip(downloadUrl, "Beat Saber_Data\\CustomLevels\\", fileNameNoExt);
+            }
+        }
+
+        private void SendMessage(string msg)
+        {
+            mux.SendTextMessage(mux.Channels[0].Item2, "! " + msg);
         }
 
         private static string[] GetStringsBetweenStrings(string str, string start, string end)
@@ -75,10 +107,7 @@ namespace wipbot
             return list.ToArray();
         }
 
-        private void SendMessage(string msg)
-        {
-            sslStream.Write(Encoding.UTF8.GetBytes("PRIVMSG #" + channelName + " :! " + msg + "\r\n"));
-        }
+        
 
         private void DownloadAndExtractZip(string url, string path, string folderName)
         {
@@ -132,106 +161,6 @@ namespace wipbot
                 DownloadAndExtractZip(wipUrl, "Beat Saber_Data\\CustomWIPLevels\\", urlSplit[urlSplit.Length - 1].Split('.')[0]);
         }
 
-        
-
-        private void ChatThread()
-        {
-            
-
-            try
-            {
-                string[] test = File.ReadAllLines(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) + "\\.beatsaberpluschatcore\\auth.ini");
-                foreach (string s in test)
-                {
-                    string[] ss = s.Split(' ');
-                    int count = ss.Length;
-                    if (count >= 3 && ss[0] == "Twitch.Channels")
-                        channelName = ss[2];
-                    if (count >= 3 && ss[0] == "Twitch.OAuthToken")
-                        oauthToken = ss[2];
-                }
-            }
-            catch (System.IO.FileNotFoundException e)
-            {
-                return;
-            }
-
-
-
-            while (true)
-            {
-                Thread.Sleep(1000);
-
-                TcpClient client = new TcpClient("irc.chat.twitch.tv", 6697);
-
-                sslStream = new SslStream(client.GetStream(), false);
-                try
-                {
-                    sslStream.AuthenticateAsClient("irc.chat.twitch.tv");
-                }
-                catch (AuthenticationException e)
-                {
-                    continue;
-                }
-
-                sslStream.Write(Encoding.UTF8.GetBytes("PASS " + oauthToken + "\r\n"));
-                sslStream.Write(Encoding.UTF8.GetBytes("NICK " + channelName + "\r\n"));
-                sslStream.Write(Encoding.UTF8.GetBytes("JOIN #" + channelName + "\r\n"));
-
-                byte[] buf = new byte[65536];
-                int res = sslStream.Read(buf, 0, buf.Length);
-
-                if (res == 0 || Encoding.UTF8.GetString(buf, 0, res).IndexOf("Welcome, GLHF!") == -1)
-                {
-                    //Plugin.Log.Info("Login failed");
-                    continue;
-                }
-
-                //Plugin.Log.Info("Login OK!");
-
-                while ((res = sslStream.Read(buf, 0, buf.Length)) > 0)
-                {
-                    string receivedStr = Encoding.UTF8.GetString(buf, 0, res);
-                    //Plugin.Log.Info(receivedStr);
-                    if (receivedStr.IndexOf("PING") != -1)
-                    {
-                        buf[1] = (byte)'O';
-                        sslStream.Write(buf, 0, res);
-                    }
-                    if (receivedStr.IndexOf("PRIVMSG") != -1)
-                    {
-                        int startIndex = receivedStr.IndexOf(":", 1) + 1;
-                        string sender = receivedStr.Substring(1, receivedStr.IndexOf("!") - 1);
-                        string msg = receivedStr.Substring(startIndex, receivedStr.Length - startIndex - 2);
-                        string[] msgSplit = msg.Split(' ');
-                        if (msgSplit[0] == "!wip")
-                        {
-                            if (msgSplit.Length != 2 || (msgSplit[1].IndexOf(".") != -1 && msgSplit[1].IndexOf("https://cdn.discordapp.com/") == -1 && msgSplit[1].IndexOf("https://drive.google.com/file/d/") == -1))
-                            {
-                                SendMessage("Invalid request. To request a WIP, go to http://catse.net/wip or upload the .zip anywhere on discord or on google drive, copy the download link and use the command !wip (link)");
-                            }
-                            else
-                            {
-                                wipUrl = msgSplit[1];
-                                if (msgSplit[1].IndexOf(".") == -1)
-                                    wipUrl = "http://catse.net/wips/" + msgSplit[1] + ".zip";
-                                SendMessage("WIP requested");
-                            }
-                        }
-                        if (msgSplit[0] == "!bsrdl" && sender == channelName)
-                        {
-                            WebClient webClient = new WebClient();
-                            string songInfo = webClient.DownloadString("https://beatsaver.com/api/maps/id/" + msgSplit[1]);
-                            string fileNameNoExt = msgSplit[1] + " (" + GetStringsBetweenStrings(songInfo, "\"songName\": \"", "\"")[0] + " - " + GetStringsBetweenStrings(songInfo, "\"levelAuthorName\": \"", "\"")[0] + ")";
-                            string downloadUrl = GetStringsBetweenStrings(songInfo, "\"downloadURL\": \"", "\"")[0];
-                            DownloadAndExtractZip(downloadUrl, "Beat Saber_Data\\CustomLevels\\", fileNameNoExt);
-                        }
-                    }
-                }
-
-                //Plugin.Log.Info("Receive failed, reconnecting...\n");
-
-            }
-        }
+       
     }
 }
