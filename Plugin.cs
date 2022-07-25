@@ -1,42 +1,61 @@
 ﻿using IPA;
 using IPALogger = IPA.Logging.Logger;
-using BeatSaberMarkupLanguage;
 using BeatSaberMarkupLanguage.MenuButtons;
-
-using TMPro;
-using UnityEngine;
-using UnityEngine.UI;
-
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-
 using System.Net;
-using System.IO;
-
-using System.Threading;
-
-using System.Net.Sockets;
-using System.Net.Security;
-using System.Security.Authentication;
 using System.IO;
 using System.IO.Compression;
 
-
-
 namespace wipbot
 {
+    public delegate void void_str(String str);
+    
+    public class BeatSaberPlusStuff
+    {
+        public BeatSaberPlusStuff()
+        {
+            BeatSaberPlus.SDK.Chat.Service.Acquire();
+            BeatSaberPlus.SDK.Chat.Services.ChatServiceMultiplexer mux;
+            mux = BeatSaberPlus.SDK.Chat.Service.Multiplexer;
+            mux.OnTextMessageReceived += OnMessageReceived;
+            Plugin.Instance.SetSendFunc(delegate (String msg)
+            {
+                mux.SendTextMessage(((BeatSaberPlus.SDK.Chat.Services.ChatServiceMultiplexer)mux).Channels[0].Item2, "! " + msg);
+            });
+            void OnMessageReceived(BeatSaberPlus.SDK.Chat.Interfaces.IChatService service, BeatSaberPlus.SDK.Chat.Interfaces.IChatMessage msg)
+            {
+                Plugin.Instance.OnMessageReceived(msg.Message, msg.Sender.IsBroadcaster);
+            }
+        }
+    }
+
+    public class CatCoreStuff
+    {
+        public CatCoreStuff()
+        {
+            CatCore.CatCoreInstance inst = CatCore.CatCoreInstance.Create();
+            CatCore.Services.Twitch.Interfaces.ITwitchService serv = inst.RunTwitchServices();
+            serv.OnTextMessageReceived += OnMessageReceived;
+            Plugin.Instance.SetSendFunc(delegate (String msg)
+            {
+                serv.DefaultChannel.SendMessage("! " + msg);
+            });
+            void OnMessageReceived(CatCore.Services.Twitch.Interfaces.ITwitchService service, CatCore.Models.Twitch.IRC.TwitchMessage msg)
+            {
+                Plugin.Instance.OnMessageReceived(msg.Message, msg.Sender.IsBroadcaster);
+            }
+        }
+    }
+
     [Plugin(RuntimeOptions.SingleStartInit)]
     public class Plugin
     {
         internal static Plugin Instance { get; private set; }
         internal static IPALogger Log { get; private set; }
 
-        BeatSaberPlus.SDK.Chat.Services.ChatServiceMultiplexer mux;
+        void_str SendMessage;
         string wipUrl;
-
 
         [Init]
         public Plugin(IPALogger logger)
@@ -48,12 +67,26 @@ namespace wipbot
         [OnStart]
         public void OnApplicationStart()
         {
-            MenuButton testBtn = new MenuButton("Download WIP", "", DownloadButtonPressed, true);
-            MenuButtons.instance.RegisterButton(testBtn);
+            MenuButton button = new MenuButton("Download WIP", "", DownloadButtonPressed, true);
+            MenuButtons.instance.RegisterButton(button);
+            try
+            {
+                new BeatSaberPlusStuff();
+                Plugin.Log.Info("Using BeatSaberPlus for chat");
+            }
+            catch (Exception e)
+            {
+                try
+                {
+                    new CatCoreStuff();
+                    Plugin.Log.Info("Using CatCore for chat");
+                }
+                catch (Exception e2)
+                {
+                    Plugin.Log.Info("Failed to initialize chat");
+                }
+            }
 
-            BeatSaberPlus.SDK.Chat.Service.Acquire();
-            mux = BeatSaberPlus.SDK.Chat.Service.Multiplexer;
-            mux.OnTextMessageReceived += OnMessageReceived;
         }
 
         [OnExit]
@@ -62,9 +95,14 @@ namespace wipbot
 
         }
 
-        void OnMessageReceived(BeatSaberPlus.SDK.Chat.Interfaces.IChatService service, BeatSaberPlus.SDK.Chat.Interfaces.IChatMessage msg)
+        public void SetSendFunc(void_str func)
         {
-            string[] msgSplit = msg.Message.Split(' ');
+            SendMessage = func;
+        }
+
+        public void OnMessageReceived(String msg, bool isBroadcaster)
+        {
+            string[] msgSplit = msg.Split(' ');
             if (msgSplit[0].ToLower().StartsWith("!wip"))
             {
                 if (msgSplit.Length != 2 || (msgSplit[1].IndexOf(".") != -1 && msgSplit[1].StartsWith("https://cdn.discordapp.com/") == false && msgSplit[1].StartsWith("https://drive.google.com/file/d/") == false))
@@ -79,7 +117,7 @@ namespace wipbot
                     SendMessage("WIP requested");
                 }
             }
-            if (msgSplit[0].ToLower().StartsWith("!bsrdl") && msg.Sender.IsBroadcaster)
+            if (msgSplit[0].ToLower().StartsWith("!bsrdl") && isBroadcaster)
             {
                 WebClient webClient = new WebClient();
                 string songInfo = webClient.DownloadString("https://beatsaver.com/api/maps/id/" + msgSplit[1]);
@@ -87,11 +125,6 @@ namespace wipbot
                 string downloadUrl = GetStringsBetweenStrings(songInfo, "\"downloadURL\": \"", "\"")[0];
                 DownloadAndExtractZip(downloadUrl, "Beat Saber_Data\\CustomLevels\\", fileNameNoExt);
             }
-        }
-
-        private void SendMessage(string msg)
-        {
-            mux.SendTextMessage(mux.Channels[0].Item2, "! " + msg);
         }
 
         private static string[] GetStringsBetweenStrings(string str, string start, string end)
@@ -106,8 +139,6 @@ namespace wipbot
             }
             return list.ToArray();
         }
-
-        
 
         private void DownloadAndExtractZip(string url, string path, string folderName)
         {
@@ -161,6 +192,5 @@ namespace wipbot
                 DownloadAndExtractZip(wipUrl, "Beat Saber_Data\\CustomWIPLevels\\", urlSplit[urlSplit.Length - 1].Split('.')[0]);
         }
 
-       
     }
 }
