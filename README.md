@@ -1,6 +1,6 @@
 # wipbot for beat saber streamers
-### NOTE: requires BeatSaberPlus
-make sure your channel moderation settings allow posting links in chat, otherwise only VIPs and above can post wip download links
+### NOTE: requires BeatSaberPlus or CatCore
+Make sure your channel moderation settings allow posting links in chat, otherwise only VIPs and above can post wip download links. Request codes obtained from the dedicated website can always be used but it might not be reliably online 24/7.
 # 
 
 This plugin adds 2 new commands to your Twitch chat.
