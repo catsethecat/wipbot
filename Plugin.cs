@@ -123,7 +123,7 @@ namespace wipbot
                 string songInfo = webClient.DownloadString("https://beatsaver.com/api/maps/id/" + msgSplit[1]);
                 string fileNameNoExt = msgSplit[1] + " (" + GetStringsBetweenStrings(songInfo, "\"songName\": \"", "\"")[0] + " - " + GetStringsBetweenStrings(songInfo, "\"levelAuthorName\": \"", "\"")[0] + ")";
                 string downloadUrl = GetStringsBetweenStrings(songInfo, "\"downloadURL\": \"", "\"")[0];
-                DownloadAndExtractZip(downloadUrl, "Beat Saber_Data\\CustomLevels\\", fileNameNoExt);
+                DownloadAndExtractZip(downloadUrl, "UserData\\wipbot", "Beat Saber_Data\\CustomLevels\\", fileNameNoExt);
             }
         }
 
@@ -140,31 +140,51 @@ namespace wipbot
             return list.ToArray();
         }
 
-        private void DownloadAndExtractZip(string url, string path, string folderName)
+        private void DownloadAndExtractZip(string url, string downloadFolder, string extractFolder, string outputFolderName)
         {
             WebClient webClient = new WebClient();
             try
             {
-                webClient.DownloadFile(url, path + folderName + ".zip");
-                if (Directory.Exists(path + folderName))
-                    Directory.Delete(path + folderName, true);
-                ZipFile.ExtractToDirectory(path + folderName + ".zip", path + folderName);
-                File.Delete(path + folderName + ".zip");
-                if (!File.Exists(path + folderName + "\\info.dat"))
+                if (!Directory.Exists(downloadFolder))
+                    Directory.CreateDirectory(downloadFolder);
+                webClient.DownloadFile(url, downloadFolder + "\\wipbot_tmp.zip");
+                if (Directory.Exists(extractFolder + outputFolderName))
+                    Directory.Delete(extractFolder + outputFolderName, true);
+                Directory.CreateDirectory(extractFolder + outputFolderName);
+                using (ZipArchive archive = ZipFile.OpenRead(downloadFolder + "\\wipbot_tmp.zip"))
                 {
-                    string[] dirs = Directory.GetDirectories(path + folderName);
-                    if (dirs.Length == 1 && File.Exists(dirs[0] + "\\info.dat"))
+                    if (archive.Entries.Count > 100)
                     {
-                        Directory.Move(dirs[0], path + folderName + "_tmp");
-                        Directory.Delete(path + folderName, true);
-                        Directory.Move(path + folderName + "_tmp", path + folderName);
+                        SendMessage("Error: WIP contains more than 100 entries");
                     }
                     else
                     {
-                        SendMessage("WIP missing info.dat");
-                        Directory.Delete(path + folderName, true);
-                        return;
+                        long totalUncompressedLength = 0;
+                        foreach (ZipArchiveEntry entry in archive.Entries)
+                        {
+                            if (entry.Name.Split(System.IO.Path.GetInvalidFileNameChars()).Length != 1)
+                            {
+                                SendMessage("Error: WIP contains file with invalid name");
+                                break;
+                            }
+                            if ((totalUncompressedLength = totalUncompressedLength + entry.Length) > 100000000)
+                            {
+                                SendMessage("Error: WIP uncompressed length >100MB");
+                                break;
+                            }
+                            if (entry.Length > 0)
+                            {
+                                entry.ExtractToFile(extractFolder + outputFolderName + "\\" + entry.Name);
+                            }
+                        }
                     }
+                }
+                File.Delete(downloadFolder + "\\wipbot_tmp.zip");
+                if (!File.Exists(extractFolder + outputFolderName + "\\info.dat"))
+                {
+                    SendMessage("Error: WIP missing info.dat");
+                    Directory.Delete(extractFolder + outputFolderName, true);
+                    return;
                 }
                 SongCore.Loader.Instance.RefreshSongs(false);
                 SendMessage("WIP download successful");
@@ -172,9 +192,9 @@ namespace wipbot
             catch (Exception e)
             {
                 if (e is WebException)
-                    SendMessage("WIP download failed");
+                    SendMessage("Error: WIP download failed");
                 else
-                    SendMessage("WIP extraction failed");
+                    SendMessage("Error: WIP extraction failed");
             }
         }
 
@@ -186,10 +206,11 @@ namespace wipbot
                 return;
             }
             string[] urlSplit = wipUrl.Split('/');
+            string folderName = "wipbot_" + Convert.ToString(DateTimeOffset.Now.ToUnixTimeSeconds(), 16);
             if (urlSplit[2] == "drive.google.com")
-                DownloadAndExtractZip("https://drive.google.com/uc?id=" + urlSplit[5] + "&export=download", "Beat Saber_Data\\CustomWIPLevels\\", urlSplit[5]);
+                DownloadAndExtractZip("https://drive.google.com/uc?id=" + urlSplit[5] + "&export=download&confirm=t", "UserData\\wipbot", "Beat Saber_Data\\CustomWIPLevels\\", folderName);
             else
-                DownloadAndExtractZip(wipUrl, "Beat Saber_Data\\CustomWIPLevels\\", urlSplit[urlSplit.Length - 1].Split('.')[0]);
+                DownloadAndExtractZip(wipUrl, "UserData\\wipbot", "Beat Saber_Data\\CustomWIPLevels\\", folderName);
         }
 
     }
