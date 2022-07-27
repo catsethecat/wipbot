@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.IO;
 using System.IO.Compression;
+using System.Threading;
 
 namespace wipbot
 {
@@ -56,6 +57,7 @@ namespace wipbot
 
         void_str SendMessage;
         string wipUrl;
+        Thread downloadThread;
 
         [Init]
         public Plugin(IPALogger logger)
@@ -67,7 +69,7 @@ namespace wipbot
         [OnStart]
         public void OnApplicationStart()
         {
-            MenuButton button = new MenuButton("Download WIP", "", DownloadButtonPressed, true);
+            MenuButton button = new MenuButton("Download WIP", "Starts or cancels a WIP download", DownloadButtonPressed, true);
             MenuButtons.instance.RegisterButton(button);
             try
             {
@@ -142,42 +144,49 @@ namespace wipbot
 
         private void DownloadAndExtractZip(string url, string downloadFolder, string extractFolder, string outputFolderName)
         {
-            WebClient webClient = new WebClient();
             try
             {
+                SendMessage("WIP download started");
+                WebClient webClient = new WebClient();
                 if (!Directory.Exists(downloadFolder))
                     Directory.CreateDirectory(downloadFolder);
                 webClient.DownloadFile(url, downloadFolder + "\\wipbot_tmp.zip");
                 if (Directory.Exists(extractFolder + outputFolderName))
                     Directory.Delete(extractFolder + outputFolderName, true);
                 Directory.CreateDirectory(extractFolder + outputFolderName);
-                using (ZipArchive archive = ZipFile.OpenRead(downloadFolder + "\\wipbot_tmp.zip"))
+                try
                 {
-                    if (archive.Entries.Count > 100)
+                    using (ZipArchive archive = ZipFile.OpenRead(downloadFolder + "\\wipbot_tmp.zip"))
                     {
-                        SendMessage("Error: WIP contains more than 100 entries");
-                    }
-                    else
-                    {
-                        long totalUncompressedLength = 0;
-                        foreach (ZipArchiveEntry entry in archive.Entries)
+                        if (archive.Entries.Count > 100)
                         {
-                            if (entry.Name.Split(System.IO.Path.GetInvalidFileNameChars()).Length != 1)
+                            SendMessage("Error: Zip contains more than 100 entries");
+                        }
+                        else
+                        {
+                            long totalUncompressedLength = 0;
+                            foreach (ZipArchiveEntry entry in archive.Entries)
                             {
-                                SendMessage("Error: WIP contains file with invalid name");
-                                break;
-                            }
-                            if ((totalUncompressedLength = totalUncompressedLength + entry.Length) > 100000000)
-                            {
-                                SendMessage("Error: WIP uncompressed length >100MB");
-                                break;
-                            }
-                            if (entry.Length > 0)
-                            {
-                                entry.ExtractToFile(extractFolder + outputFolderName + "\\" + entry.Name);
+                                if (entry.Name.Split(System.IO.Path.GetInvalidFileNameChars()).Length != 1)
+                                {
+                                    SendMessage("Error: Zip contains file with invalid name");
+                                    break;
+                                }
+                                if ((totalUncompressedLength = totalUncompressedLength + entry.Length) > 100000000)
+                                {
+                                    SendMessage("Error: Zip uncompressed length >100MB");
+                                    break;
+                                }
+                                if (entry.Length > 0)
+                                {
+                                    entry.ExtractToFile(extractFolder + outputFolderName + "\\" + entry.Name);
+                                }
                             }
                         }
                     }
+                }catch(Exception e)
+                {
+                    SendMessage("Error: Zip extraction failed");
                 }
                 File.Delete(downloadFolder + "\\wipbot_tmp.zip");
                 if (!File.Exists(extractFolder + outputFolderName + "\\info.dat"))
@@ -188,13 +197,16 @@ namespace wipbot
                 }
                 SongCore.Loader.Instance.RefreshSongs(false);
                 SendMessage("WIP download successful");
+                wipUrl = null;
             }
             catch (Exception e)
             {
                 if (e is WebException)
                     SendMessage("Error: WIP download failed");
+                else if (e is ThreadAbortException)
+                    SendMessage("WIP download cancelled");
                 else
-                    SendMessage("Error: WIP extraction failed");
+                    SendMessage("Error: " + e.Message);
             }
         }
 
@@ -202,16 +214,22 @@ namespace wipbot
         {
             if(wipUrl == null)
             {
-                SendMessage("WIP not requested");
+                SendMessage("no WIP requested");
+                return;
+            }
+            if(downloadThread != null && downloadThread.IsAlive)
+            {
+                downloadThread.Abort();
+                downloadThread = null;
                 return;
             }
             string[] urlSplit = wipUrl.Split('/');
             string folderName = "wipbot_" + Convert.ToString(DateTimeOffset.Now.ToUnixTimeSeconds(), 16);
             if (urlSplit[2] == "drive.google.com")
-                DownloadAndExtractZip("https://drive.google.com/uc?id=" + urlSplit[5] + "&export=download&confirm=t", "UserData\\wipbot", "Beat Saber_Data\\CustomWIPLevels\\", folderName);
+                downloadThread = new Thread(() => DownloadAndExtractZip("https://drive.google.com/uc?id=" + urlSplit[5] + "&export=download&confirm=t", "UserData\\wipbot", "Beat Saber_Data\\CustomWIPLevels\\", folderName));
             else
-                DownloadAndExtractZip(wipUrl, "UserData\\wipbot", "Beat Saber_Data\\CustomWIPLevels\\", folderName);
+                downloadThread = new Thread(() => DownloadAndExtractZip(wipUrl, "UserData\\wipbot", "Beat Saber_Data\\CustomWIPLevels\\", folderName));
+            downloadThread.Start();
         }
-
     }
 }
