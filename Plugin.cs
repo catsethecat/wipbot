@@ -1,4 +1,5 @@
 ﻿using IPA;
+using IPA.Config.Stores;
 using IPALogger = IPA.Logging.Logger;
 using BeatSaberMarkupLanguage.MenuButtons;
 using System;
@@ -7,11 +8,39 @@ using System.Net;
 using System.IO;
 using System.IO.Compression;
 using System.Threading;
+using System.Linq;
+using System.Runtime.CompilerServices;
 
+[assembly: InternalsVisibleTo(GeneratedStore.AssemblyVisibilityTarget)]
 namespace wipbot
 {
     public delegate void void_str(String str);
-    
+
+    class Config
+    {
+        public static Config Instance { get; set; }
+        public virtual int ZipMaxEntries { get; set; } = 100;
+        public virtual int ZipMaxUncompressedSizeMB { get; set; } = 100;
+        public virtual string FileExtensionWhitelist { get; set; } = "png jpg jpeg dat json ogg egg";
+        public virtual string RequestCodeDownloadUrl { get; set; } = "http://catse.net/wips/%s.zip";
+        public virtual string CommandRequestWip { get; set; } = "!wip";
+        public virtual string CommandDownloadBsr { get; set; } = "!bsrdl";
+        public virtual string MessageInvalidRequest { get; set; } = "! Invalid request. To request a WIP, go to http://catse.net/wip or upload the .zip anywhere on discord or on google drive, copy the download link and use the command !wip (link)";
+        public virtual string MessageWipRequested { get; set; } = "! WIP requested";
+        public virtual string MessageDownloadStarted { get; set; } = "! WIP download started";
+        public virtual string MessageDownloadSuccess { get; set; } = "! WIP download successful";
+        public virtual string MessageNoRequest { get; set; } = "! WIP not requested";
+        public virtual string MessageDownloadCancelled { get; set; } = "! WIP download cancelled";
+        public virtual string ErrorMessageTooManyEntries { get; set; } = "! Error: Zip contains more than %i entries";
+        public virtual string ErrorMessageInvalidFilename { get; set; } = "! Error: Zip contains file with invalid name";
+        public virtual string ErrorMessageMaxLength { get; set; } = "! Error: Zip uncompressed length >%i MB";
+        public virtual string ErrorMessageExtractionFailed { get; set; } = "! Error: Zip extraction failed";
+        public virtual string ErrorMessageBadExtension { get; set; } = "! Skipped %i files during extraction due to bad file extension";
+        public virtual string ErrorMessageMissingInfoDat { get; set; } = "! Error: WIP missing info.dat";
+        public virtual string ErrorMessageDownloadFailed { get; set; } = "! Error: WIP download failed";
+        public virtual string ErrorMessageOther { get; set; } = "! Error: %s";
+    }
+
     public class BeatSaberPlusStuff
     {
         public BeatSaberPlusStuff()
@@ -22,7 +51,7 @@ namespace wipbot
             mux.OnTextMessageReceived += OnMessageReceived;
             Plugin.Instance.SetSendFunc(delegate (String msg)
             {
-                mux.SendTextMessage(((BeatSaberPlus.SDK.Chat.Services.ChatServiceMultiplexer)mux).Channels[0].Item2, "! " + msg);
+                mux.SendTextMessage(((BeatSaberPlus.SDK.Chat.Services.ChatServiceMultiplexer)mux).Channels[0].Item2, msg);
             });
             void OnMessageReceived(BeatSaberPlus.SDK.Chat.Interfaces.IChatService service, BeatSaberPlus.SDK.Chat.Interfaces.IChatMessage msg)
             {
@@ -40,7 +69,7 @@ namespace wipbot
             serv.OnTextMessageReceived += OnMessageReceived;
             Plugin.Instance.SetSendFunc(delegate (String msg)
             {
-                serv.DefaultChannel.SendMessage("! " + msg);
+                serv.DefaultChannel.SendMessage(msg);
             });
             void OnMessageReceived(CatCore.Services.Twitch.Interfaces.ITwitchService service, CatCore.Models.Twitch.IRC.TwitchMessage msg)
             {
@@ -60,10 +89,11 @@ namespace wipbot
         Thread downloadThread;
 
         [Init]
-        public Plugin(IPALogger logger)
+        public Plugin(IPALogger logger, IPA.Config.Config config)
         {
             Instance = this;
             Log = logger;
+            Config.Instance = config.Generated<Config>();
         }
 
         [OnStart]
@@ -88,7 +118,6 @@ namespace wipbot
                     Plugin.Log.Info("Failed to initialize chat");
                 }
             }
-
         }
 
         [OnExit]
@@ -105,21 +134,21 @@ namespace wipbot
         public void OnMessageReceived(String msg, bool isBroadcaster)
         {
             string[] msgSplit = msg.Split(' ');
-            if (msgSplit[0].ToLower().StartsWith("!wip"))
+            if (msgSplit[0].ToLower().StartsWith(Config.Instance.CommandRequestWip))
             {
                 if (msgSplit.Length != 2 || (msgSplit[1].IndexOf(".") != -1 && msgSplit[1].StartsWith("https://cdn.discordapp.com/") == false && msgSplit[1].StartsWith("https://drive.google.com/file/d/") == false))
                 {
-                    SendMessage("Invalid request. To request a WIP, go to http://catse.net/wip or upload the .zip anywhere on discord or on google drive, copy the download link and use the command !wip (link)");
+                    SendMessage(Config.Instance.MessageInvalidRequest);
                 }
                 else
                 {
                     wipUrl = msgSplit[1];
                     if (msgSplit[1].IndexOf(".") == -1)
-                        wipUrl = "http://catse.net/wips/" + msgSplit[1] + ".zip";
-                    SendMessage("WIP requested");
+                        wipUrl = Config.Instance.RequestCodeDownloadUrl.Replace("%s", msgSplit[1]);
+                    SendMessage(Config.Instance.MessageWipRequested);
                 }
             }
-            if (msgSplit[0].ToLower().StartsWith("!bsrdl") && isBroadcaster)
+            if (msgSplit[0].ToLower().StartsWith(Config.Instance.CommandDownloadBsr) && isBroadcaster)
             {
                 WebClient webClient = new WebClient();
                 string songInfo = webClient.DownloadString("https://beatsaver.com/api/maps/id/" + msgSplit[1]);
@@ -146,67 +175,81 @@ namespace wipbot
         {
             try
             {
-                SendMessage("WIP download started");
+                SendMessage(Config.Instance.MessageDownloadStarted);
                 WebClient webClient = new WebClient();
+                webClient.Headers.Add(HttpRequestHeader.UserAgent, "Beat Saber wipbot v1.8.0");
                 if (!Directory.Exists(downloadFolder))
                     Directory.CreateDirectory(downloadFolder);
                 webClient.DownloadFile(url, downloadFolder + "\\wipbot_tmp.zip");
                 if (Directory.Exists(extractFolder + outputFolderName))
                     Directory.Delete(extractFolder + outputFolderName, true);
                 Directory.CreateDirectory(extractFolder + outputFolderName);
+                int badFileTypesFound = 0;
                 try
                 {
                     using (ZipArchive archive = ZipFile.OpenRead(downloadFolder + "\\wipbot_tmp.zip"))
                     {
-                        if (archive.Entries.Count > 100)
+                        if (archive.Entries.Count > Config.Instance.ZipMaxEntries)
                         {
-                            SendMessage("Error: Zip contains more than 100 entries");
+                            SendMessage(Config.Instance.ErrorMessageTooManyEntries.Replace("%i",""+Config.Instance.ZipMaxEntries));
                         }
                         else
                         {
                             long totalUncompressedLength = 0;
                             foreach (ZipArchiveEntry entry in archive.Entries)
                             {
+                                
                                 if (entry.Name.Split(System.IO.Path.GetInvalidFileNameChars()).Length != 1)
                                 {
-                                    SendMessage("Error: Zip contains file with invalid name");
+                                    SendMessage(Config.Instance.ErrorMessageInvalidFilename);
                                     break;
                                 }
-                                if ((totalUncompressedLength = totalUncompressedLength + entry.Length) > 100000000)
+                                if ((totalUncompressedLength = totalUncompressedLength + entry.Length) > (Config.Instance.ZipMaxUncompressedSizeMB * 1000000))
                                 {
-                                    SendMessage("Error: Zip uncompressed length >100MB");
+                                    SendMessage(Config.Instance.ErrorMessageMaxLength.Replace("%i", "" + Config.Instance.ZipMaxUncompressedSizeMB));
                                     break;
                                 }
                                 if (entry.Length > 0)
                                 {
-                                    entry.ExtractToFile(extractFolder + outputFolderName + "\\" + entry.Name);
+                                    string[] whitelist = Config.Instance.FileExtensionWhitelist.Split(' ');
+                                    string[] entryNameSplit = entry.Name.Split('.');
+                                    if (whitelist.Any(entryNameSplit[entryNameSplit.Length - 1].ToLower().Contains))
+                                    {
+                                        entry.ExtractToFile(extractFolder + outputFolderName + "\\" + entry.Name);
+                                    }
+                                    else
+                                    {
+                                        badFileTypesFound++;
+                                    }
                                 }
                             }
                         }
                     }
                 }catch(Exception e)
                 {
-                    SendMessage("Error: Zip extraction failed");
+                    SendMessage(Config.Instance.ErrorMessageExtractionFailed);
                 }
                 File.Delete(downloadFolder + "\\wipbot_tmp.zip");
+                if(badFileTypesFound > 0)
+                    SendMessage(Config.Instance.ErrorMessageBadExtension.Replace("%i", "" + badFileTypesFound));
                 if (!File.Exists(extractFolder + outputFolderName + "\\info.dat"))
                 {
-                    SendMessage("Error: WIP missing info.dat");
+                    SendMessage(Config.Instance.ErrorMessageMissingInfoDat);
                     Directory.Delete(extractFolder + outputFolderName, true);
                     return;
                 }
                 SongCore.Loader.Instance.RefreshSongs(false);
-                SendMessage("WIP download successful");
+                SendMessage(Config.Instance.MessageDownloadSuccess);
                 wipUrl = null;
             }
             catch (Exception e)
             {
                 if (e is WebException)
-                    SendMessage("Error: WIP download failed");
+                    SendMessage(Config.Instance.ErrorMessageDownloadFailed);
                 else if (e is ThreadAbortException)
-                    SendMessage("WIP download cancelled");
+                    SendMessage(Config.Instance.MessageDownloadCancelled);
                 else
-                    SendMessage("Error: " + e.Message);
+                    SendMessage(Config.Instance.ErrorMessageOther.Replace("%s", e.Message));
             }
         }
 
@@ -214,7 +257,7 @@ namespace wipbot
         {
             if(wipUrl == null)
             {
-                SendMessage("no WIP requested");
+                SendMessage(Config.Instance.MessageNoRequest);
                 return;
             }
             if(downloadThread != null && downloadThread.IsAlive)
