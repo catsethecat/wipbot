@@ -39,6 +39,7 @@ namespace wipbot
         public virtual string ErrorMessageMissingInfoDat { get; set; } = "! Error: WIP missing info.dat";
         public virtual string ErrorMessageDownloadFailed { get; set; } = "! Error: WIP download failed";
         public virtual string ErrorMessageOther { get; set; } = "! Error: %s";
+        public virtual string ErrorMessageLinkBlocked { get; set; } = "! Error: Your link was blocked by the channel's chat moderation settings";
     }
 
     public class BeatSaberPlusStuff
@@ -136,6 +137,11 @@ namespace wipbot
             string[] msgSplit = msg.Split(' ');
             if (msgSplit[0].ToLower().StartsWith(Config.Instance.CommandRequestWip))
             {
+                if (msgSplit.Length > 1 && msgSplit[1] == "***")
+                {
+                    SendMessage(Config.Instance.ErrorMessageLinkBlocked);
+                    return;
+                }
                 if (msgSplit.Length != 2 || (msgSplit[1].IndexOf(".") != -1 && msgSplit[1].StartsWith("https://cdn.discordapp.com/") == false && msgSplit[1].StartsWith("https://drive.google.com/file/d/") == false))
                 {
                     SendMessage(Config.Instance.MessageInvalidRequest);
@@ -177,7 +183,7 @@ namespace wipbot
             {
                 SendMessage(Config.Instance.MessageDownloadStarted);
                 WebClient webClient = new WebClient();
-                webClient.Headers.Add(HttpRequestHeader.UserAgent, "Beat Saber wipbot v1.8.0");
+                webClient.Headers.Add(HttpRequestHeader.UserAgent, "Beat Saber wipbot v1.9.0");
                 if (!Directory.Exists(downloadFolder))
                     Directory.CreateDirectory(downloadFolder);
                 webClient.DownloadFile(url, downloadFolder + "\\wipbot_tmp.zip");
