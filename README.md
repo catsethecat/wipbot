@@ -3,15 +3,17 @@
 Make sure your channel moderation settings allow posting links in chat, otherwise only VIPs and above can post wip download links. Request codes obtained from the dedicated website can always be used but it might not be reliably online 24/7.
 # 
 
-This plugin adds 2 new commands to your Twitch chat.
+### This plugin adds the ``!wip`` command to your Twitch chat.  
+Examples:  
+``!wip`` prints a help message in chat  
+``!wip e5a5bb`` using a request code obtained from http://catse.net/wip  
+``!wip https://cdn.discordapp.com/attachments/9106712553161/9165053429928/Example_Wip.zip`` using Discord  
+``!wip https://drive.google.com/file/d/1rcs9V_aq1kBjNhAQUdFz7f7kvWR/view?usp=sharing`` using Google Drive  
 
-``!wip (url)``  
-This command can be used by anyone to request a wip. Url should be a link to a .zip file hosted on discord or google drive, or a request code obtained from http://catse.net/wip  
-After someone has requested a wip, press the "Download WIP" button in the mods panel and the map should show up in the WIP playlist.
+After someone has requested a wip, press the WIP button to download it:
+![image](https://user-images.githubusercontent.com/45233053/205438155-c58a499b-1b7a-4049-af67-30d15e1b1f6e.png)
 
-![image](https://user-images.githubusercontent.com/45233053/176416266-ef201bb7-a8da-4c1f-a273-7a4e9b57b52f.png)
 
 # 
 
-``!bsrdl (bsr code)``  
-This command can only be used by the streamer. It downloads a map based on a BSR key. Intended as a backup in case the in-game map downloaders fail for whatever reason.
+Theres also a secret command ``!bsrdl (bsr code)`` which can only be used by the streamer. It downloads a map based on a BSR key. Intended as a backup in case your song request system fails to download a map so you can avoid having to download it from BeatSaver manually.
