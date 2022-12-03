@@ -1,7 +1,7 @@
 ﻿using IPA;
 using IPA.Config.Stores;
 using IPALogger = IPA.Logging.Logger;
-using BeatSaberMarkupLanguage.MenuButtons;
+using BeatSaberMarkupLanguage;
 using System;
 using System.Collections.Generic;
 using System.Net;
@@ -10,6 +10,10 @@ using System.IO.Compression;
 using System.Threading;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using HarmonyLib;
+using UnityEngine;
+using HMUI;
+using BeatSaberMarkupLanguage.Attributes;
 
 [assembly: InternalsVisibleTo(GeneratedStore.AssemblyVisibilityTarget)]
 namespace wipbot
@@ -29,7 +33,6 @@ namespace wipbot
         public virtual string MessageWipRequested { get; set; } = "! WIP requested";
         public virtual string MessageDownloadStarted { get; set; } = "! WIP download started";
         public virtual string MessageDownloadSuccess { get; set; } = "! WIP download successful";
-        public virtual string MessageNoRequest { get; set; } = "! WIP not requested";
         public virtual string MessageDownloadCancelled { get; set; } = "! WIP download cancelled";
         public virtual string ErrorMessageTooManyEntries { get; set; } = "! Error: Zip contains more than %i entries";
         public virtual string ErrorMessageInvalidFilename { get; set; } = "! Error: Zip contains file with invalid name";
@@ -85,9 +88,15 @@ namespace wipbot
         internal static Plugin Instance { get; private set; }
         internal static IPALogger Log { get; private set; }
 
-        void_str SendMessage;
-        string wipUrl;
-        Thread downloadThread;
+        static void_str SendChatMessage;
+        static string wipUrl;
+        static string latestDownloadedSongPath;
+        static Thread downloadThread;
+        static BeatmapLevelsModel beatmapLevelsModel;
+        static LevelCollectionNavigationController navigationController;
+        static SelectLevelCategoryViewController categoryController;
+        static LevelFilteringNavigationController filteringController;
+        static LevelSearchViewController searchController;
 
         [Init]
         public Plugin(IPALogger logger, IPA.Config.Config config)
@@ -100,8 +109,6 @@ namespace wipbot
         [OnStart]
         public void OnApplicationStart()
         {
-            MenuButton button = new MenuButton("Download WIP", "Starts or cancels a WIP download", DownloadButtonPressed, true);
-            MenuButtons.instance.RegisterButton(button);
             try
             {
                 new BeatSaberPlusStuff();
@@ -119,6 +126,9 @@ namespace wipbot
                     Plugin.Log.Info("Failed to initialize chat");
                 }
             }
+            Harmony harmony = new Harmony("Catse.BeatSaber.wipbot");
+            harmony.PatchAll(System.Reflection.Assembly.GetExecutingAssembly());
+            SongCore.Loader.OnLevelPacksRefreshed += OnLevelsRefreshed;
         }
 
         [OnExit]
@@ -129,7 +139,7 @@ namespace wipbot
 
         public void SetSendFunc(void_str func)
         {
-            SendMessage = func;
+            SendChatMessage = func;
         }
 
         public void OnMessageReceived(String msg, bool isBroadcaster)
@@ -139,19 +149,21 @@ namespace wipbot
             {
                 if (msgSplit.Length > 1 && msgSplit[1] == "***")
                 {
-                    SendMessage(Config.Instance.ErrorMessageLinkBlocked);
+                    SendChatMessage(Config.Instance.ErrorMessageLinkBlocked);
                     return;
                 }
                 if (msgSplit.Length != 2 || (msgSplit[1].IndexOf(".") != -1 && msgSplit[1].StartsWith("https://cdn.discordapp.com/") == false && msgSplit[1].StartsWith("https://drive.google.com/file/d/") == false))
                 {
-                    SendMessage(Config.Instance.MessageInvalidRequest);
+                    SendChatMessage(Config.Instance.MessageInvalidRequest);
                 }
                 else
                 {
                     wipUrl = msgSplit[1];
                     if (msgSplit[1].IndexOf(".") == -1)
                         wipUrl = Config.Instance.RequestCodeDownloadUrl.Replace("%s", msgSplit[1]);
-                    SendMessage(Config.Instance.MessageWipRequested);
+                    SendChatMessage(Config.Instance.MessageWipRequested);
+                    WipbotButtonController.instance.buttonActive = false;
+                    WipbotButtonController.instance.button2Active = true;
                 }
             }
             if (msgSplit[0].ToLower().StartsWith(Config.Instance.CommandDownloadBsr) && isBroadcaster)
@@ -177,13 +189,13 @@ namespace wipbot
             return list.ToArray();
         }
 
-        private void DownloadAndExtractZip(string url, string downloadFolder, string extractFolder, string outputFolderName)
+        private static void DownloadAndExtractZip(string url, string downloadFolder, string extractFolder, string outputFolderName)
         {
             try
             {
-                SendMessage(Config.Instance.MessageDownloadStarted);
+                SendChatMessage(Config.Instance.MessageDownloadStarted);
                 WebClient webClient = new WebClient();
-                webClient.Headers.Add(HttpRequestHeader.UserAgent, "Beat Saber wipbot v1.9.0");
+                webClient.Headers.Add(HttpRequestHeader.UserAgent, "Beat Saber wipbot v1.10.0");
                 if (!Directory.Exists(downloadFolder))
                     Directory.CreateDirectory(downloadFolder);
                 webClient.DownloadFile(url, downloadFolder + "\\wipbot_tmp.zip");
@@ -197,7 +209,7 @@ namespace wipbot
                     {
                         if (archive.Entries.Count > Config.Instance.ZipMaxEntries)
                         {
-                            SendMessage(Config.Instance.ErrorMessageTooManyEntries.Replace("%i",""+Config.Instance.ZipMaxEntries));
+                            SendChatMessage(Config.Instance.ErrorMessageTooManyEntries.Replace("%i",""+Config.Instance.ZipMaxEntries));
                         }
                         else
                         {
@@ -207,12 +219,12 @@ namespace wipbot
                                 
                                 if (entry.Name.Split(System.IO.Path.GetInvalidFileNameChars()).Length != 1)
                                 {
-                                    SendMessage(Config.Instance.ErrorMessageInvalidFilename);
+                                    SendChatMessage(Config.Instance.ErrorMessageInvalidFilename);
                                     break;
                                 }
                                 if ((totalUncompressedLength = totalUncompressedLength + entry.Length) > (Config.Instance.ZipMaxUncompressedSizeMB * 1000000))
                                 {
-                                    SendMessage(Config.Instance.ErrorMessageMaxLength.Replace("%i", "" + Config.Instance.ZipMaxUncompressedSizeMB));
+                                    SendChatMessage(Config.Instance.ErrorMessageMaxLength.Replace("%i", "" + Config.Instance.ZipMaxUncompressedSizeMB));
                                     break;
                                 }
                                 if (entry.Length > 0)
@@ -233,52 +245,168 @@ namespace wipbot
                     }
                 }catch(Exception e)
                 {
-                    SendMessage(Config.Instance.ErrorMessageExtractionFailed);
+                    SendChatMessage(Config.Instance.ErrorMessageExtractionFailed);
                 }
                 File.Delete(downloadFolder + "\\wipbot_tmp.zip");
                 if(badFileTypesFound > 0)
-                    SendMessage(Config.Instance.ErrorMessageBadExtension.Replace("%i", "" + badFileTypesFound));
+                    SendChatMessage(Config.Instance.ErrorMessageBadExtension.Replace("%i", "" + badFileTypesFound));
                 if (!File.Exists(extractFolder + outputFolderName + "\\info.dat"))
                 {
-                    SendMessage(Config.Instance.ErrorMessageMissingInfoDat);
+                    SendChatMessage(Config.Instance.ErrorMessageMissingInfoDat);
                     Directory.Delete(extractFolder + outputFolderName, true);
-                    return;
                 }
-                SongCore.Loader.Instance.RefreshSongs(false);
-                SendMessage(Config.Instance.MessageDownloadSuccess);
-                wipUrl = null;
+                else
+                {
+                    latestDownloadedSongPath = extractFolder + outputFolderName;
+                    SongCore.Loader.Instance.RefreshSongs(false);
+                    SendChatMessage(Config.Instance.MessageDownloadSuccess);
+                }
             }
             catch (Exception e)
             {
                 if (e is WebException)
-                    SendMessage(Config.Instance.ErrorMessageDownloadFailed);
+                    SendChatMessage(Config.Instance.ErrorMessageDownloadFailed);
                 else if (e is ThreadAbortException)
-                    SendMessage(Config.Instance.MessageDownloadCancelled);
+                    SendChatMessage(Config.Instance.MessageDownloadCancelled);
                 else
-                    SendMessage(Config.Instance.ErrorMessageOther.Replace("%s", e.Message));
+                    SendChatMessage(Config.Instance.ErrorMessageOther.Replace("%s", e.Message));
+            }
+            wipUrl = null;
+            WipbotButtonController.instance.buttonActive = true;
+            WipbotButtonController.instance.button2Active = false;
+        }
+
+        public static void OnLevelsRefreshed()
+        {
+            GameObject testObject = new GameObject();
+            testObject.AddComponent<CoroutineTest>();
+        }
+
+
+        public class CoroutineTest : MonoBehaviour
+        {
+            public void Awake()
+            {
+                StartCoroutine(SelectSongCoroutine());
+            }
+            private System.Collections.IEnumerator SelectSongCoroutine()
+            {
+                if (latestDownloadedSongPath != null)
+                {
+                    SongCore.Data.SongData sd = SongCore.Loader.Instance.LoadCustomLevelSongData(latestDownloadedSongPath);
+                    CustomPreviewBeatmapLevel cl = SongCore.Loader.LoadSong(sd.SaveData, latestDownloadedSongPath, out string hash);
+                    latestDownloadedSongPath = null;
+                    SegmentedControl control = categoryController.transform.Find("HorizontalIconSegmentedControl").GetComponent<IconSegmentedControl>();
+                    control.SelectCellWithNumber(3);
+                    categoryController.LevelFilterCategoryIconSegmentedControlDidSelectCell(control, 3);
+                    searchController.ResetCurrentFilterParams();
+                    filteringController.UpdateSecondChildControllerContent(SelectLevelCategoryViewController.LevelCategory.All);
+                    yield return new WaitForSeconds(0.5f);
+                    foreach (IBeatmapLevelPack levelPack in beatmapLevelsModel.allLoadedBeatmapLevelPackCollection.beatmapLevelPacks)
+                    {
+                        foreach (IPreviewBeatmapLevel level in levelPack.beatmapLevelCollection.beatmapLevels)
+                        {
+                            if (level.levelID.StartsWith("custom_level_" + hash))
+                            {
+                                navigationController.SelectLevel(level);
+                                yield break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        public class WipbotButtonController : BeatSaberMarkupLanguage.Components.NotifiableSingleton<WipbotButtonController>
+        {
+            [UIComponent("wipbot-button")]
+            private readonly RectTransform wipbotButtonTransform;
+
+            [UIComponent("wipbot-button2")]
+            private readonly RectTransform wipbotButton2Transform;
+
+            bool tmp1 = true;
+            bool tmp2 = false;
+            bool initialized = false;
+
+            [UIValue("button-active")]
+            public bool buttonActive
+            {
+                get => tmp1;
+                set { tmp1 = value; NotifyPropertyChanged(); }
+            }
+
+            [UIValue("button2-active")]
+            public bool button2Active
+            {
+                get => tmp2;
+                set { tmp2 = value; NotifyPropertyChanged(); }
+            }
+
+            public void init(GameObject parent)
+            {
+                if (initialized) return;
+                initialized = true;
+                BSMLParser.instance.Parse(
+                    @"<bg xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance' xsi:schemaLocation='https://monkeymanboy.github.io/BSML-Docs/ https://raw.githubusercontent.com/monkeymanboy/BSML-Docs/gh-pages/BSMLSchema.xsd'>
+                    <button id='wipbot-button' active='~button-active' text='wip' font-size='3' on-click='wipbot-click' anchor-pos-x='139' anchor-pos-y='-2' pref-height='6' pref-width='11' />
+                    <action-button id='wipbot-button2' active='~button2-active' text='wip' font-size='3' on-click='wipbot-click2' anchor-pos-x='59' anchor-pos-y='1' pref-height='6' pref-width='11' />
+                    </bg>"
+                    , parent, this);
+            }
+
+            [UIAction("wipbot-click2")]
+            void DownloadButtonPressed()
+            {
+                if (downloadThread != null && downloadThread.IsAlive)
+                {
+                    downloadThread.Abort();
+                    downloadThread = null;
+                    return;
+                }
+                string[] urlSplit = wipUrl.Split('/');
+                string folderName = "wipbot_" + Convert.ToString(DateTimeOffset.Now.ToUnixTimeSeconds(), 16);
+                if (urlSplit[2] == "drive.google.com")
+                    downloadThread = new Thread(() => DownloadAndExtractZip("https://drive.google.com/uc?id=" + urlSplit[5] + "&export=download&confirm=t", "UserData\\wipbot", "Beat Saber_Data\\CustomWIPLevels\\", folderName));
+                else
+                    downloadThread = new Thread(() => DownloadAndExtractZip(wipUrl, "UserData\\wipbot", "Beat Saber_Data\\CustomWIPLevels\\", folderName));
+                downloadThread.Start();
+            }
+
+            [UIAction("wipbot-click")]
+            void Asdf2()
+            {
+                
+            }
+
+            [UIAction("#post-parse")]
+            private void PostParse()
+            {
+                
             }
         }
 
-        private void DownloadButtonPressed()
+        [HarmonyPatch]
+        class patches
         {
-            if(wipUrl == null)
-            {
-                SendMessage(Config.Instance.MessageNoRequest);
-                return;
-            }
-            if(downloadThread != null && downloadThread.IsAlive)
-            {
-                downloadThread.Abort();
-                downloadThread = null;
-                return;
-            }
-            string[] urlSplit = wipUrl.Split('/');
-            string folderName = "wipbot_" + Convert.ToString(DateTimeOffset.Now.ToUnixTimeSeconds(), 16);
-            if (urlSplit[2] == "drive.google.com")
-                downloadThread = new Thread(() => DownloadAndExtractZip("https://drive.google.com/uc?id=" + urlSplit[5] + "&export=download&confirm=t", "UserData\\wipbot", "Beat Saber_Data\\CustomWIPLevels\\", folderName));
-            else
-                downloadThread = new Thread(() => DownloadAndExtractZip(wipUrl, "UserData\\wipbot", "Beat Saber_Data\\CustomWIPLevels\\", folderName));
-            downloadThread.Start();
+            [HarmonyPatch(typeof(LevelSelectionNavigationController), "DidActivate")]
+            static void Postfix(LevelSelectionNavigationController __instance) { WipbotButtonController.instance.init(__instance.gameObject); }
+
+            [HarmonyPatch(typeof(BeatmapLevelsModel), "Init")]
+            static void Postfix(BeatmapLevelsModel __instance) { beatmapLevelsModel = __instance; }
+
+            [HarmonyPatch(typeof(LevelCollectionNavigationController), "DidActivate")]
+            static void Postfix(LevelCollectionNavigationController __instance) { navigationController = __instance; }
+
+            [HarmonyPatch(typeof(LevelFilteringNavigationController), "DidActivate")]
+            static void Postfix(LevelFilteringNavigationController __instance) { filteringController = __instance; }
+
+            [HarmonyPatch(typeof(SelectLevelCategoryViewController), "DidActivate")]
+            static void Postfix(SelectLevelCategoryViewController __instance) { categoryController = __instance; }
+
+            [HarmonyPatch(typeof(LevelSearchViewController), "DidActivate")]
+            static void Postfix(LevelSearchViewController __instance) { searchController = __instance; }
         }
+
     }
 }
