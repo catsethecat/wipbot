@@ -195,7 +195,7 @@ namespace wipbot
             {
                 SendChatMessage(Config.Instance.MessageDownloadStarted);
                 WebClient webClient = new WebClient();
-                webClient.Headers.Add(HttpRequestHeader.UserAgent, "Beat Saber wipbot v1.10.0");
+                webClient.Headers.Add(HttpRequestHeader.UserAgent, "Beat Saber wipbot v1.11.0");
                 if (!Directory.Exists(downloadFolder))
                     Directory.CreateDirectory(downloadFolder);
                 webClient.DownloadFile(url, downloadFolder + "\\wipbot_tmp.zip");
@@ -327,7 +327,6 @@ namespace wipbot
 
             bool tmp1 = true;
             bool tmp2 = false;
-            bool initialized = false;
 
             [UIValue("button-active")]
             public bool buttonActive
@@ -345,8 +344,7 @@ namespace wipbot
 
             public void init(GameObject parent)
             {
-                if (initialized) return;
-                initialized = true;
+                if (wipbotButtonTransform != null) return;
                 BSMLParser.instance.Parse(
                     @"<bg xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance' xsi:schemaLocation='https://monkeymanboy.github.io/BSML-Docs/ https://raw.githubusercontent.com/monkeymanboy/BSML-Docs/gh-pages/BSMLSchema.xsd'>
                     <button id='wipbot-button' active='~button-active' text='wip' font-size='3' on-click='wipbot-click' anchor-pos-x='139' anchor-pos-y='-2' pref-height='6' pref-width='11' />
