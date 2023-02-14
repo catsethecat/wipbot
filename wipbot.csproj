@@ -95,16 +95,16 @@
       <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Beat Saber\Plugins\SongCore.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="BeatSaberPlus">
-      <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Beat Saber\Plugins\BeatSaberPlus.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
     <Reference Include="CatCore">
       <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Beat Saber\Libs\CatCore.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="0Harmony">
       <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Beat Saber\Libs\0Harmony.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="BeatSaberPlus">
+      <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Beat Saber\Plugins\BeatSaberPlus.dll</HintPath>
       <Private>False</Private>
     </Reference>
   </ItemGroup>
