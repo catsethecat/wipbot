@@ -192,7 +192,7 @@ namespace wipbot
                 foreach (QueueItem request in wipQueue)
                     if (request.UserName == userName)
                         requestCount++;
-                if (msgSplit[1].ToLower() == Config.Instance.KeywordUndoRequest)
+                if (msgSplit.Length > 1 && msgSplit[1].ToLower() == Config.Instance.KeywordUndoRequest)
                 {
                     for (int i = wipQueue.Count - 1; i >= 0; i--)
                     {
@@ -248,7 +248,7 @@ namespace wipbot
                 Thread.Sleep(1000);
                 SendChatMessage(Config.Instance.MessageDownloadStarted);
                 WebClient webClient = new WebClient();
-                webClient.Headers.Add(HttpRequestHeader.UserAgent, "Beat Saber wipbot v1.13.0");
+                webClient.Headers.Add(HttpRequestHeader.UserAgent, "Beat Saber wipbot v1.13.1");
                 if (!Directory.Exists(downloadFolder))
                     Directory.CreateDirectory(downloadFolder);
                 webClient.DownloadFile(url, downloadFolder + "\\wipbot_tmp.zip");
