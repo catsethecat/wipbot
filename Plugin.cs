@@ -14,6 +14,7 @@ using HarmonyLib;
 using UnityEngine;
 using HMUI;
 using BeatSaberMarkupLanguage.Attributes;
+using wipbot.utils;
 
 [assembly: InternalsVisibleTo(GeneratedStore.AssemblyVisibilityTarget)]
 namespace wipbot
@@ -30,7 +31,10 @@ namespace wipbot
 
     public struct QueueItem
     {
+		// The user who requested the wip
         public string UserName;
+
+		// The download url of the wip
         public string DownloadUrl;
     }
 
@@ -81,7 +85,8 @@ namespace wipbot
             });
             void OnMessageReceived(BeatSaberPlus.SDK.Chat.Interfaces.IChatService service, BeatSaberPlus.SDK.Chat.Interfaces.IChatMessage msg)
             {
-                Plugin.Instance.OnMessageReceived(msg.Sender.UserName, msg.Message, msg.Sender.IsBroadcaster, msg.Sender.IsModerator, msg.Sender.IsVip, msg.Sender.IsSubscriber);
+                Plugin.Instance.OnMessageReceived(msg.Sender.UserName, msg.Message, msg.Sender.IsBroadcaster, msg.Sender.IsModerator,
+				 	msg.Sender.IsVip, msg.Sender.IsSubscriber);
             }
         }
     }
@@ -99,9 +104,10 @@ namespace wipbot
             });
             void OnMessageReceived(CatCore.Services.Twitch.Interfaces.ITwitchService service, CatCore.Models.Twitch.IRC.TwitchMessage msg)
             {
+				var sender = ((CatCore.Models.Twitch.IRC.TwitchUser)msg.Sender);
+
                 Plugin.Instance.OnMessageReceived(msg.Sender.UserName, msg.Message, msg.Sender.IsBroadcaster, msg.Sender.IsModerator,
-                    ((CatCore.Models.Twitch.IRC.TwitchUser)msg.Sender).IsVip,
-                    ((CatCore.Models.Twitch.IRC.TwitchUser)msg.Sender).IsSubscriber);
+					sender.IsVip, sender.IsSubscriber);
             }
         }
     }
@@ -138,14 +144,14 @@ namespace wipbot
                 new BeatSaberPlusHook();
                 Plugin.Log.Info("Using BeatSaberPlus for chat");
             }
-            catch (Exception e)
+            catch (Exception)
             {
                 try
                 {
                     new CatCoreHook();
                     Plugin.Log.Info("Using CatCore for chat");
                 }
-                catch (Exception e2)
+                catch (Exception)
                 {
                     Plugin.Log.Info("Failed to initialize chat");
                 }
@@ -173,71 +179,113 @@ namespace wipbot
             WipbotButtonController.instance.button2Active = wipQueue.Count > 0;
             string hint = "";
             for (int i = 0; i < wipQueue.Count; i++)
-                hint = hint + (i+1) + " " + wipQueue[i].UserName + " ";
+			{
+				hint = hint + (i+1) + " " + wipQueue[i].UserName + " ";
+			}
             WipbotButtonController.instance.button2Hint = hint;
 
         }
 
         public void OnMessageReceived(String userName, String msg, bool isBroadcaster, bool isModerator, bool isVip, bool isSubscriber)
         {
-            string[] msgSplit = msg.Split(' ');
-            if (msgSplit[0].ToLower().StartsWith(Config.Instance.CommandRequestWip))
-            {
-                int requestLimit = isBroadcaster ? 99 : 
-                    isModerator ? Config.Instance.QueueLimits.Moderator :
-                    isVip ? Config.Instance.QueueLimits.Vip : 
-                    isSubscriber ? Config.Instance.QueueLimits.Subscriber :
-                    Config.Instance.QueueLimits.User;
-                int requestCount = 0;
-                foreach (QueueItem request in wipQueue)
-                    if (request.UserName == userName)
-                        requestCount++;
-                if (msgSplit.Length > 1 && msgSplit[1].ToLower() == Config.Instance.KeywordUndoRequest)
-                {
-                    for (int i = wipQueue.Count - 1; i >= 0; i--)
-                    {
-                        if (wipQueue[i].UserName == userName)
-                        {
-                            wipQueue.RemoveAt(i);
-                            SendChatMessage(Config.Instance.MessageUndoRequest);
-                            UpdateButtonState();
-                            break;
-                        }
-                    }
-                }
-                else if (requestLimit == 0)
-                {
-                    SendChatMessage(Config.Instance.ErrorMessageNoPermission);
-                }
-                else if (requestCount == requestLimit)
-                {
-                    SendChatMessage(Config.Instance.ErrorMessageUserMaxRequests);
-                }
-                else if (wipQueue.Count == Config.Instance.QueueSize)
-                {
-                    SendChatMessage(Config.Instance.ErrorMessageQueueFull);
-                }
-                else if (msgSplit.Length > 1 && msgSplit[1] == "***")
-                {
-                    SendChatMessage(Config.Instance.ErrorMessageLinkBlocked);
-                }
-                else if (msgSplit.Length != 2 || (msgSplit[1].IndexOf(".") != -1 && msgSplit[1].StartsWith("https://cdn.discordapp.com/") == false && msgSplit[1].StartsWith("https://drive.google.com/file/d/") == false))
-                {
-                    SendChatMessage(Config.Instance.MessageInvalidRequest);
-                }
-                else
-                {
-                    string wipUrl = msgSplit[1];
-                    if (msgSplit[1].IndexOf(".") == -1)
-                        wipUrl = Config.Instance.RequestCodeDownloadUrl.Replace("%s", msgSplit[1]);
-                    string[] urlSplit = wipUrl.Split('/');
-                    if (urlSplit[2] == "drive.google.com")
-                        wipUrl = "https://drive.google.com/uc?id=" + urlSplit[5] + "&export=download&confirm=t";
-                    wipQueue.Add(new QueueItem() { UserName = userName, DownloadUrl = wipUrl });
-                    SendChatMessage(Config.Instance.MessageWipRequested);
-                    UpdateButtonState();
-                }
+            string[] msgSplit = msg.Split(' '); // Split the message
+
+            string command = msgSplit[0].ToLower(); // Get the command
+            string[] args = msgSplit.Skip(1).ToArray(); // Get the arguments
+ 
+            if (!command.StartsWith(Config.Instance.CommandRequestWip)) // Not a valid command
+			{
+              	return;
             }
+
+            // The amount of requests a user can have in the queue at once
+            int requestLimit = isBroadcaster ? 99 : 
+                isModerator ? Config.Instance.QueueLimits.Moderator :
+                isVip ? Config.Instance.QueueLimits.Vip : 
+                isSubscriber ? Config.Instance.QueueLimits.Subscriber :
+                Config.Instance.QueueLimits.User;
+
+            int requestCount = 0; // The amount of requests a user has in the queue
+            foreach (QueueItem request in wipQueue)
+			{
+				if (request.UserName == userName) {
+					requestCount++;
+				}
+            }
+
+            // Undo command (!wip oops)
+            if (args[0] == Config.Instance.KeywordUndoRequest)
+			{
+				for (int i = wipQueue.Count - 1; i >= 0; i--)
+				{
+					if (wipQueue[i].UserName == userName)
+					{
+						wipQueue.RemoveAt(i);
+						SendChatMessage(Config.Instance.MessageUndoRequest);
+						UpdateButtonState();
+						break;
+					}
+				}
+            }
+
+			// Permission error
+			if (requestLimit == 0)
+			{
+				SendChatMessage(Config.Instance.ErrorMessageNoPermission);
+				return;
+			}
+
+			// User is at request limit
+			if (requestCount >= requestLimit)
+			{
+				SendChatMessage(Config.Instance.ErrorMessageUserMaxRequests);
+				return;
+			}
+
+			// The queue is full
+			if (wipQueue.Count >= Config.Instance.QueueSize)
+			{
+				SendChatMessage(Config.Instance.ErrorMessageQueueFull);
+			}
+
+			// Twitch has blocked the URL
+			if (args[0] == "***")
+			{
+				SendChatMessage(Config.Instance.ErrorMessageLinkBlocked);
+				return;
+			}
+
+            string mapId = args[0];
+            string downloadUrl = null;
+            bool isValidMap = false;
+            
+            if (mapId.StartsWith("https://cdn.discordapp.com")) // Check discord
+            {
+                downloadUrl = mapId;
+                isValidMap = WebUtils.IsValidMap(mapId);
+            }
+
+            if (mapId.StartsWith("https://drive.google.com")) // Check google drive
+            {
+                string[] urlParts = mapId.Split('/');
+                downloadUrl = "https://drive.google.com/uc?id=" + urlParts[5] + "&export=download&confirm=t";
+                isValidMap = WebUtils.IsValidMap(downloadUrl);
+            }
+
+            // Is not a valid map
+            if (!isValidMap)
+            {
+                SendChatMessage(Config.Instance.MessageInvalidRequest);
+                return;
+            }
+
+			wipQueue.Add(new QueueItem()
+			{
+				UserName = userName,
+				DownloadUrl = downloadUrl
+            }); // Add the request to the queue
+			SendChatMessage(Config.Instance.MessageWipRequested); // Send the message
+			UpdateButtonState(); // Update the button state
         }
 
         private static void DownloadAndExtractZip(string url, string downloadFolder, string extractFolder, string outputFolderName)
@@ -250,10 +298,14 @@ namespace wipbot
                 WebClient webClient = new WebClient();
                 webClient.Headers.Add(HttpRequestHeader.UserAgent, "Beat Saber wipbot v1.13.1");
                 if (!Directory.Exists(downloadFolder))
+                {
                     Directory.CreateDirectory(downloadFolder);
+                }
                 webClient.DownloadFile(url, downloadFolder + "\\wipbot_tmp.zip");
                 if (Directory.Exists(extractFolder + outputFolderName))
+                {
                     Directory.Delete(extractFolder + outputFolderName, true);
+                }
                 Directory.CreateDirectory(extractFolder + outputFolderName);
                 int badFileTypesFound = 0;
                 try
@@ -296,13 +348,15 @@ namespace wipbot
                             }
                         }
                     }
-                }catch(Exception e)
+                } catch(Exception)
                 {
                     SendChatMessage(Config.Instance.ErrorMessageExtractionFailed);
                 }
                 File.Delete(downloadFolder + "\\wipbot_tmp.zip");
-                if(badFileTypesFound > 0)
+                if (badFileTypesFound > 0)
+                {
                     SendChatMessage(Config.Instance.ErrorMessageBadExtension.Replace("%i", "" + badFileTypesFound));
+                }
                 if (!File.Exists(extractFolder + outputFolderName + "\\info.dat"))
                 {
                     SendChatMessage(Config.Instance.ErrorMessageMissingInfoDat);
@@ -318,23 +372,31 @@ namespace wipbot
             catch (Exception e)
             {
                 if (e is WebException)
-                    SendChatMessage(Config.Instance.ErrorMessageDownloadFailed);
-                else if (e is ThreadAbortException)
-                    SendChatMessage(Config.Instance.MessageDownloadCancelled);
-                else
-                    SendChatMessage(Config.Instance.ErrorMessageOther.Replace("%s", e.Message));
+				{
+					SendChatMessage(Config.Instance.ErrorMessageDownloadFailed);
+				}
+
+				if (e is ThreadAbortException)
+				{
+					SendChatMessage(Config.Instance.MessageDownloadCancelled);
+				}
+				
+				else 
+				{
+					SendChatMessage(Config.Instance.ErrorMessageOther.Replace("%s", e.Message));
+				}
             }
             UpdateButtonState();
         }
 
         public static void OnLevelsRefreshed()
         {
-            GameObject testObject = new GameObject();
-            testObject.AddComponent<CoroutineTest>();
+            GameObject gameObject = new GameObject();
+            gameObject.AddComponent<LevelSelecter>();
         }
 
 
-        public class CoroutineTest : MonoBehaviour
+        public class LevelSelecter : MonoBehaviour
         {
             public void Awake()
             {
@@ -342,26 +404,27 @@ namespace wipbot
             }
             private System.Collections.IEnumerator SelectSongCoroutine()
             {
-                if (latestDownloadedSongPath != null)
+                if (latestDownloadedSongPath == null) // No WIP song downloaded
                 {
-                    SongCore.Data.SongData sd = SongCore.Loader.Instance.LoadCustomLevelSongData(latestDownloadedSongPath);
-                    CustomPreviewBeatmapLevel cl = SongCore.Loader.LoadSong(sd.SaveData, latestDownloadedSongPath, out string hash);
-                    latestDownloadedSongPath = null;
-                    SegmentedControl control = categoryController.transform.Find("HorizontalIconSegmentedControl").GetComponent<IconSegmentedControl>();
-                    control.SelectCellWithNumber(3);
-                    categoryController.LevelFilterCategoryIconSegmentedControlDidSelectCell(control, 3);
-                    searchController.ResetCurrentFilterParams();
-                    filteringController.UpdateSecondChildControllerContent(SelectLevelCategoryViewController.LevelCategory.All);
-                    yield return new WaitForSeconds(0.5f);
-                    foreach (IBeatmapLevelPack levelPack in beatmapLevelsModel.allLoadedBeatmapLevelPackCollection.beatmapLevelPacks)
+                    yield break;
+                }
+                SongCore.Data.SongData sd = SongCore.Loader.Instance.LoadCustomLevelSongData(latestDownloadedSongPath);
+                CustomPreviewBeatmapLevel cl = SongCore.Loader.LoadSong(sd.SaveData, latestDownloadedSongPath, out string hash);
+                latestDownloadedSongPath = null;
+                SegmentedControl control = categoryController.transform.Find("HorizontalIconSegmentedControl").GetComponent<IconSegmentedControl>();
+                control.SelectCellWithNumber(3);
+                categoryController.LevelFilterCategoryIconSegmentedControlDidSelectCell(control, 3);
+                searchController.ResetCurrentFilterParams();
+                filteringController.UpdateSecondChildControllerContent(SelectLevelCategoryViewController.LevelCategory.All);
+                yield return new WaitForSeconds(0.5f);
+                foreach (IBeatmapLevelPack levelPack in beatmapLevelsModel.allLoadedBeatmapLevelPackCollection.beatmapLevelPacks)
+                {
+                    foreach (IPreviewBeatmapLevel level in levelPack.beatmapLevelCollection.beatmapLevels)
                     {
-                        foreach (IPreviewBeatmapLevel level in levelPack.beatmapLevelCollection.beatmapLevels)
+                        if (level.levelID.StartsWith("custom_level_" + hash))
                         {
-                            if (level.levelID.StartsWith("custom_level_" + hash))
-                            {
-                                navigationController.SelectLevel(level);
-                                yield break;
-                            }
+                            navigationController.SelectLevel(level);
+                            yield break;
                         }
                     }
                 }
