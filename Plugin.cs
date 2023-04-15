@@ -31,10 +31,10 @@ namespace wipbot
 
     public struct QueueItem
     {
-		// The user who requested the wip
+        // The user who requested the wip
         public string UserName;
 
-		// The download url of the wip
+        // The download url of the wip
         public string DownloadUrl;
     }
 
