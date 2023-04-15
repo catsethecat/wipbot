@@ -67,9 +67,9 @@ namespace wipbot
         public virtual string ErrorMessageNoPermission { get; set; } = "! Error: You don't have permission to use the wip command";
     }
 
-    public class BeatSaberPlusStuff
+    public class BeatSaberPlusHook
     {
-        public BeatSaberPlusStuff()
+        public BeatSaberPlusHook()
         {
             BeatSaberPlus.SDK.Chat.Service.Acquire();
             BeatSaberPlus.SDK.Chat.Services.ChatServiceMultiplexer mux;
@@ -86,9 +86,9 @@ namespace wipbot
         }
     }
 
-    public class CatCoreStuff
+    public class CatCoreHook
     {
-        public CatCoreStuff()
+        public CatCoreHook()
         {
             CatCore.CatCoreInstance inst = CatCore.CatCoreInstance.Create();
             CatCore.Services.Twitch.Interfaces.ITwitchService serv = inst.RunTwitchServices();
@@ -135,14 +135,14 @@ namespace wipbot
         {
             try
             {
-                new BeatSaberPlusStuff();
+                new BeatSaberPlusHook();
                 Plugin.Log.Info("Using BeatSaberPlus for chat");
             }
             catch (Exception e)
             {
                 try
                 {
-                    new CatCoreStuff();
+                    new CatCoreHook();
                     Plugin.Log.Info("Using CatCore for chat");
                 }
                 catch (Exception e2)
