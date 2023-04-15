@@ -258,7 +258,13 @@ namespace wipbot
             string mapId = args[0];
             string downloadUrl = null;
             bool isValidMap = false;
-            
+
+            if (mapId.StartsWith("https://wip.fascinated.cc")) // Check fascinatedcc wips
+            {
+                downloadUrl = mapId;
+                isValidMap = WebUtils.IsValidMap(mapId);
+            }
+
             if (mapId.StartsWith("https://cdn.discordapp.com")) // Check discord
             {
                 downloadUrl = mapId;
