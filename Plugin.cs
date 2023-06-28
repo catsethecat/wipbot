@@ -1,5 +1,7 @@
 ﻿using IPA;
 using IPA.Config.Stores;
+using IPA.Config.Stores.Attributes;
+using IPA.Config.Stores.Converters;
 using IPALogger = IPA.Logging.Logger;
 using BeatSaberMarkupLanguage;
 using System;
@@ -41,6 +43,14 @@ namespace wipbot
         public virtual int ZipMaxUncompressedSizeMB { get; set; } = 100;
         public virtual string FileExtensionWhitelist { get; set; } = "png jpg jpeg dat json ogg egg";
         public virtual string RequestCodeDownloadUrl { get; set; } = "http://catse.net/wips/%s.zip";
+        public virtual string RequestCodeCharacterWhitelist { get; set; } = "0123456789abcdefABCDEF";
+        [UseConverter(typeof(ListConverter<string>))]
+        [NonNullable]
+        public virtual List<string> UrlWhitelist { get; set; } = new List<string>() { "https://cdn.discordapp.com/", "https://drive.google.com/file/d/" };
+        [UseConverter(typeof(ListConverter<string>))]
+        [NonNullable]
+        public virtual List<string> UrlFindReplace { get; set; } = new List<string>() { "https://drive.google.com/file/d/", "https://drive.google.com/uc?id=", "/view?usp=sharing", "&export=download&confirm=t", "/view?usp=drive_link", "&export=download&confirm=t" };
+        public virtual string WipFolder { get; set; } = "Beat Saber_Data\\CustomWIPLevels\\";
         public virtual string CommandRequestWip { get; set; } = "!wip";
         public virtual string KeywordUndoRequest { get; set; } = "oops";
         public virtual QueueLimits QueueLimits { get; set; } = new QueueLimits { User = 2, Subscriber = 2, Vip = 2, Moderator = 2 };
@@ -221,18 +231,18 @@ namespace wipbot
                 {
                     SendChatMessage(Config.Instance.ErrorMessageLinkBlocked);
                 }
-                else if (msgSplit.Length != 2 || (msgSplit[1].IndexOf(".") != -1 && msgSplit[1].StartsWith("https://cdn.discordapp.com/") == false && msgSplit[1].StartsWith("https://drive.google.com/file/d/") == false))
+                else if (msgSplit.Length != 2 || (msgSplit[1].All(Config.Instance.RequestCodeCharacterWhitelist.Contains) == false && Config.Instance.UrlWhitelist.Any(msgSplit[1].Contains) == false))
                 {
                     SendChatMessage(Config.Instance.MessageInvalidRequest);
                 }
                 else
                 {
                     string wipUrl = msgSplit[1];
+
                     if (msgSplit[1].IndexOf(".") == -1)
                         wipUrl = Config.Instance.RequestCodeDownloadUrl.Replace("%s", msgSplit[1]);
-                    string[] urlSplit = wipUrl.Split('/');
-                    if (urlSplit[2] == "drive.google.com")
-                        wipUrl = "https://drive.google.com/uc?id=" + urlSplit[5] + "&export=download&confirm=t";
+                    for (int i = 0; i < Config.Instance.UrlFindReplace.Count; i += 2)
+                        wipUrl = wipUrl.Replace(Config.Instance.UrlFindReplace[i], Config.Instance.UrlFindReplace[i + 1]);
                     wipQueue.Add(new QueueItem() { UserName = userName, DownloadUrl = wipUrl });
                     SendChatMessage(Config.Instance.MessageWipRequested);
                     UpdateButtonState();
@@ -248,7 +258,7 @@ namespace wipbot
                 Thread.Sleep(1000);
                 SendChatMessage(Config.Instance.MessageDownloadStarted);
                 WebClient webClient = new WebClient();
-                webClient.Headers.Add(HttpRequestHeader.UserAgent, "Beat Saber wipbot v1.13.1");
+                webClient.Headers.Add(HttpRequestHeader.UserAgent, "Beat Saber wipbot v1.14.0");
                 if (!Directory.Exists(downloadFolder))
                     Directory.CreateDirectory(downloadFolder);
                 webClient.DownloadFile(url, downloadFolder + "\\wipbot_tmp.zip");
@@ -432,7 +442,7 @@ namespace wipbot
                 }
                 string wipUrl = wipQueue[0].DownloadUrl;
                 string folderName = "wipbot_" + Convert.ToString(DateTimeOffset.Now.ToUnixTimeSeconds(), 16);
-                downloadThread = new Thread(() => DownloadAndExtractZip(wipUrl, "UserData\\wipbot", "Beat Saber_Data\\CustomWIPLevels\\", folderName));
+                downloadThread = new Thread(() => DownloadAndExtractZip(wipUrl, "UserData\\wipbot", Config.Instance.WipFolder, folderName));
                 downloadThread.Start();
                 wipQueue.RemoveAt(0);
             }
