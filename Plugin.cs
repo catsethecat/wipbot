@@ -77,19 +77,19 @@ namespace wipbot
         public virtual string ErrorMessageNoPermission { get; set; } = "! Error: You don't have permission to use the wip command";
     }
 
-    public class BeatSaberPlusStuff
+    public class ChatPlexSDKStuff
     {
-        public BeatSaberPlusStuff()
+        public ChatPlexSDKStuff()
         {
-            BeatSaberPlus.SDK.Chat.Service.Acquire();
-            BeatSaberPlus.SDK.Chat.Services.ChatServiceMultiplexer mux;
-            mux = BeatSaberPlus.SDK.Chat.Service.Multiplexer;
+            CP_SDK.Chat.Service.Acquire();
+            CP_SDK.Chat.Services.ChatServiceMultiplexer mux;
+            mux = CP_SDK.Chat.Service.Multiplexer;
             mux.OnTextMessageReceived += OnMessageReceived;
             Plugin.Instance.SetSendFunc(delegate (String msg)
             {
-                mux.SendTextMessage(((BeatSaberPlus.SDK.Chat.Services.ChatServiceMultiplexer)mux).Channels[0].Item2, msg);
+                mux.SendTextMessage(((CP_SDK.Chat.Services.ChatServiceMultiplexer)mux).Channels[0].Item2, msg);
             });
-            void OnMessageReceived(BeatSaberPlus.SDK.Chat.Interfaces.IChatService service, BeatSaberPlus.SDK.Chat.Interfaces.IChatMessage msg)
+            void OnMessageReceived(CP_SDK.Chat.Interfaces.IChatService service, CP_SDK.Chat.Interfaces.IChatMessage msg)
             {
                 Plugin.Instance.OnMessageReceived(msg.Sender.UserName, msg.Message, msg.Sender.IsBroadcaster, msg.Sender.IsModerator, msg.Sender.IsVip, msg.Sender.IsSubscriber);
             }
@@ -145,8 +145,8 @@ namespace wipbot
         {
             try
             {
-                new BeatSaberPlusStuff();
-                Plugin.Log.Info("Using BeatSaberPlus for chat");
+                new ChatPlexSDKStuff();
+                Plugin.Log.Info("Using ChatPlexSDK for chat");
             }
             catch (Exception e)
             {
@@ -378,7 +378,7 @@ namespace wipbot
             }
         }
         
-        public class WipbotButtonController : BeatSaberMarkupLanguage.Components.NotifiableSingleton<WipbotButtonController>
+        public class WipbotButtonController : BeatSaberMarkupLanguage.Util.NotifiableSingleton<WipbotButtonController>
         {
             [UIComponent("wipbot-button")]
             private readonly RectTransform wipbotButtonTransform;
