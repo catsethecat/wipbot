@@ -17,7 +17,7 @@ namespace wipbot.UI
         [Inject] private readonly MainThreadDispatcher _mainThreadDispatcher;
         internal event Action OnWipButtonPressed;
         private bool _fakeButtonActive = true;
-        private bool _wipButtonActive = true;
+        private bool _wipButtonActive = false;
         private string _wipButtonText = "wip";
         private string _wipButtonHint = "";
 
@@ -64,7 +64,6 @@ namespace wipbot.UI
                 "<action-button id='wipbot-button2' active='~WipButtonActive' text='~WipButtonText' hover-hint='~WipButtonHint' word-wrapping='false' font-size='3' on-click='wipbot-click2' anchor-pos-x='" + (Config.ButtonPositionX - 80) + "' anchor-pos-y='" + (Config.ButtonPositionY + 3) + "' pref-height='6' pref-width='11' />" +
                 "</bg>"
                 , Resources.FindObjectsOfTypeAll<LevelSelectionNavigationController>().First().gameObject, this);
-            WipButtonActive = false;
         }
 
         [UIAction("wipbot-click2")]

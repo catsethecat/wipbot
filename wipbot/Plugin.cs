@@ -19,12 +19,18 @@ namespace wipbot
         public Plugin(IPALogger logger, IPA.Config.Config config, Zenjector zenject)
         {
             zenject.UseLogger(logger);
-            zenject.Install(Location.App, Container =>
+            var chat = InitializeChat(logger);
+
+            // Dont start zenjecting if chat is null
+            if (chat != null)
             {
-                Container.BindInstance(config.Generated<WBConfig>()).AsSingle();
-                Container.BindInstance(InitializeChat(logger)).AsSingle();
-            });
-            zenject.Install<WBMenuInstaller>(Location.Menu);
+                zenject.Install(Location.App, Container =>
+                {
+                    Container.BindInstance(config.Generated<WBConfig>()).AsSingle();
+                    Container.BindInstance(chat).AsSingle();
+                });
+                zenject.Install<WBMenuInstaller>(Location.Menu);
+            }
         }
 
         private static IChatIntegration InitializeChat(IPALogger logger)
