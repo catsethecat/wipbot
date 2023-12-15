@@ -135,7 +135,6 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Installers\WBMenuInstaller.cs" />
     <Compile Include="Interfaces\IChatIntegration.cs" />
     <Compile Include="Interop\CatCoreInterop.cs" />
     <Compile Include="Interop\ChatPlexSDKInterop.cs" />

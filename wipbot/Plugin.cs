@@ -3,7 +3,6 @@ using IPA.Config.Stores;
 using SiraUtil.Zenject;
 using System.Linq;
 using System.Runtime.CompilerServices;
-using wipbot.Installers;
 using wipbot.Interfaces;
 using wipbot.Interop;
 using wipbot.UI;
