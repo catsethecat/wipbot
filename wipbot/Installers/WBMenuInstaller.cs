@@ -8,8 +8,7 @@ namespace wipbot.Installers
     {
         public override void InstallBindings()
         {
-            Container.BindInterfacesAndSelfTo<WipbotButtonController>().AsSingle();
-            Container.BindInterfacesAndSelfTo<WipbotManager>().AsSingle();
+            
         }
     }
 }

@@ -49,7 +49,6 @@ namespace wipbot
             string[] msgSplit = ChatMessage.Content.Split(' ');
             if (msgSplit[0].ToLower().StartsWith(Config.CommandRequestWip))
             {
-                Logger.Info($"Processing message {ChatMessage.Content} by {ChatMessage.UserName}");
                 int requestLimit = 
                     ChatMessage.IsBroadcaster ? 99 :
                     ChatMessage.IsModerator ? Config.QueueLimits.Moderator :
@@ -92,7 +91,6 @@ namespace wipbot
                     WipQueue.Enqueue(new QueueItem() { UserName = ChatMessage.UserName, DownloadUrl = wipUrl });
                     ChatIntegration.SendChatMessage(Config.MessageWipRequested);
                     WipbotButtonController.UpdateButtonState(WipQueue.ToArray());
-                    Logger.Warn($"Added {ChatMessage.UserName}'s request to the queue");
                 }
             }
         }
