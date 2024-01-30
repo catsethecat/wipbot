@@ -63,7 +63,7 @@ namespace wipbot
         public virtual int QueueSize { get; set; } = 9;
         public virtual int ButtonPositionX { get; set; } = 139;
         public virtual int ButtonPositionY { get; set; } = -2;
-        public virtual string MessageHelp { get; set; } = "! To request a WIP, go to http://catse.net/wip or upload the .zip anywhere on discord or on google drive, copy the download link and use the command !wip (link)";
+        public virtual string MessageHelp { get; set; } = "! To request a WIP, go to https://wipbot.catse.net or upload the .zip anywhere on discord or on google drive, copy the download link and use the command !wip (link)";
         public virtual string MessageInvalidRequest2 { get; set; } = "! Invalid request";
         public virtual string MessageWipRequested { get; set; } = "! WIP requested";
         public virtual string MessageUndoRequest { get; set; } = "! Removed your latest request from wip queue";
@@ -135,6 +135,7 @@ namespace wipbot
         static BeatmapLevelsModel beatmapLevelsModel;
         static LevelCollectionNavigationController navigationController;
         static SelectLevelCategoryViewController categoryController;
+        static LevelFilteringNavigationController filteringController;
         static LevelSearchViewController searchController;
 
         [Init]
@@ -396,10 +397,9 @@ namespace wipbot
                     latestDownloadedSongPath = null;
                     SegmentedControl control = categoryController.transform.Find("HorizontalIconSegmentedControl").GetComponent<IconSegmentedControl>();
                     control.SelectCellWithNumber(3);
-                    MethodInfo method = typeof(SelectLevelCategoryViewController).GetMethod("LevelFilterCategoryIconSegmentedControlDidSelectCell", BindingFlags.Instance | BindingFlags.NonPublic);
-                    object[] args = { control, 3 };
-                    method.Invoke(categoryController, args);
-                    searchController.ResetFilterParams(false);
+                    categoryController.LevelFilterCategoryIconSegmentedControlDidSelectCell(control, 3);
+                    searchController.ResetCurrentFilterParams();
+                    filteringController.UpdateSecondChildControllerContent(SelectLevelCategoryViewController.LevelCategory.All);
                     yield return new WaitForSeconds(0.5f);
                     foreach (IBeatmapLevelPack levelPack in beatmapLevelsModel.allLoadedBeatmapLevelPackCollection.beatmapLevelPacks)
                     {
@@ -416,7 +416,7 @@ namespace wipbot
             }
         }
         
-        public class WipbotButtonController : BeatSaberMarkupLanguage.Util.NotifiableSingleton<WipbotButtonController>
+        public class WipbotButtonController : BeatSaberMarkupLanguage.Components.NotifiableSingleton<WipbotButtonController>
         {
             [UIComponent("gray-button")]
             private readonly RectTransform grayButtonTransform;
@@ -506,6 +506,9 @@ namespace wipbot
 
             [HarmonyPatch(typeof(LevelCollectionNavigationController), "DidActivate")]
             static void Postfix(LevelCollectionNavigationController __instance) { navigationController = __instance; }
+
+            [HarmonyPatch(typeof(LevelFilteringNavigationController), "DidActivate")]
+            static void Postfix(LevelFilteringNavigationController __instance) { filteringController = __instance; }
 
             [HarmonyPatch(typeof(SelectLevelCategoryViewController), "DidActivate")]
             static void Postfix(SelectLevelCategoryViewController __instance) { categoryController = __instance; }
