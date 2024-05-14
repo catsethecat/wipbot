@@ -18,6 +18,7 @@ using HMUI;
 using BeatSaberMarkupLanguage.Attributes;
 using System.Reflection;
 using IPA.Loader;
+using static IPA.Logging.Logger;
 
 [assembly: InternalsVisibleTo(GeneratedStore.AssemblyVisibilityTarget)]
 namespace wipbot
@@ -132,7 +133,6 @@ namespace wipbot
         static List<QueueItem> wipQueue = new List<QueueItem>();
         static string latestDownloadedSongPath;
         static Thread downloadThread;
-        static BeatmapLevelsModel beatmapLevelsModel;
         static LevelCollectionNavigationController navigationController;
         static SelectLevelCategoryViewController categoryController;
         static LevelSearchViewController searchController;
@@ -148,7 +148,7 @@ namespace wipbot
         [OnStart]
         public void OnApplicationStart()
         {
-            if(PluginManager.GetPluginFromId("ChatPlexSDK_BS") != null)
+            if (PluginManager.GetPluginFromId("ChatPlexSDK_BS") != null)
             {
                 new ChatPlexInitializer();
                 Plugin.Log.Info("Using ChatPlexSDK for chat");
@@ -185,7 +185,7 @@ namespace wipbot
             WipbotButtonController.instance.blueButtonActive = wipQueue.Count > 0;
             string hint = "";
             for (int i = 0; i < wipQueue.Count; i++)
-                hint = hint + (i+1) + " " + wipQueue[i].UserName + " ";
+                hint = hint + (i + 1) + " " + wipQueue[i].UserName + " ";
             WipbotButtonController.instance.blueButtonHint = hint;
 
         }
@@ -195,9 +195,9 @@ namespace wipbot
             string[] msgSplit = msg.Split(' ');
             if (msgSplit[0].ToLower().StartsWith(Config.Instance.CommandRequestWip))
             {
-                int requestLimit = isBroadcaster ? 99 : 
+                int requestLimit = isBroadcaster ? 99 :
                     isModerator ? Config.Instance.QueueLimits.Moderator :
-                    isVip ? Config.Instance.QueueLimits.Vip : 
+                    isVip ? Config.Instance.QueueLimits.Vip :
                     isSubscriber ? Config.Instance.QueueLimits.Subscriber :
                     Config.Instance.QueueLimits.User;
                 int requestCount = 0;
@@ -233,7 +233,7 @@ namespace wipbot
                 {
                     SendChatMessage(Config.Instance.ErrorMessageLinkBlocked);
                 }
-                else if(msgSplit.Length == 1)
+                else if (msgSplit.Length == 1)
                 {
                     SendChatMessage(Config.Instance.MessageHelp);
                 }
@@ -248,15 +248,15 @@ namespace wipbot
                     if (msgSplit[1].IndexOf(".") == -1)
                     {
                         wipUrl = "";
-                        for (int i = 0; i < Config.Instance.RequestCodePrefixDownloadUrlPairs.Count; i+=2)
+                        for (int i = 0; i < Config.Instance.RequestCodePrefixDownloadUrlPairs.Count; i += 2)
                         {
                             if (msgSplit[1].StartsWith(Config.Instance.RequestCodePrefixDownloadUrlPairs[i]))
                             {
-                                wipUrl = Config.Instance.RequestCodePrefixDownloadUrlPairs[i+1].Replace("%s", msgSplit[1]);
+                                wipUrl = Config.Instance.RequestCodePrefixDownloadUrlPairs[i + 1].Replace("%s", msgSplit[1]);
                                 break;
                             }
                         }
-                        if(wipUrl == "")
+                        if (wipUrl == "")
                         {
                             SendChatMessage(Config.Instance.MessageInvalidRequest2);
                             return;
@@ -284,7 +284,7 @@ namespace wipbot
             {
                 WipbotButtonController.instance.blueButtonText = "skip";
                 Thread.Sleep(1000);
-                webClient.Headers.Add(HttpRequestHeader.UserAgent, "Beat Saber wipbot v1.15.0");
+                webClient.Headers.Add(HttpRequestHeader.UserAgent, "Beat Saber wipbot v1.16.0");
                 if (!Directory.Exists(downloadFolder))
                     Directory.CreateDirectory(downloadFolder);
                 webClient.DownloadProgressChanged += (sender, args) => { WipbotButtonController.instance.blueButtonText = args.ProgressPercentage + "%"; };
@@ -306,14 +306,14 @@ namespace wipbot
                     {
                         if (archive.Entries.Count > Config.Instance.ZipMaxEntries)
                         {
-                            SendChatMessage(Config.Instance.ErrorMessageTooManyEntries.Replace("%i",""+Config.Instance.ZipMaxEntries));
+                            SendChatMessage(Config.Instance.ErrorMessageTooManyEntries.Replace("%i", "" + Config.Instance.ZipMaxEntries));
                         }
                         else
                         {
                             long totalUncompressedLength = 0;
                             foreach (ZipArchiveEntry entry in archive.Entries)
                             {
-                                
+
                                 if (entry.Name.Split(System.IO.Path.GetInvalidFileNameChars()).Length != 1)
                                 {
                                     SendChatMessage(Config.Instance.ErrorMessageInvalidFilename);
@@ -343,13 +343,14 @@ namespace wipbot
                             }
                         }
                     }
-                }catch(Exception e)
+                }
+                catch (Exception e)
                 {
                     SendChatMessage(Config.Instance.ErrorMessageExtractionFailed);
                 }
                 File.Delete(downloadFolder + "\\wipbot_tmp.zip");
-                if(badFileTypesFound > 0)
-                    SendChatMessage(Config.Instance.ErrorMessageBadExtension2.Replace("%i", "" + badFileTypesFound).Replace("%s",badFileTypeNames));
+                if (badFileTypesFound > 0)
+                    SendChatMessage(Config.Instance.ErrorMessageBadExtension2.Replace("%i", "" + badFileTypesFound).Replace("%s", badFileTypeNames));
                 if (!File.Exists(extractFolder + outputFolderName + "\\info.dat"))
                 {
                     SendChatMessage(Config.Instance.ErrorMessageMissingInfoDat);
@@ -359,7 +360,7 @@ namespace wipbot
                 {
                     latestDownloadedSongPath = extractFolder + outputFolderName;
                     SongCore.Loader.Instance.RefreshSongs(false);
-                    SendChatMessage(Config.Instance.MessageDownloadSuccess2.Replace("%s",requester));
+                    SendChatMessage(Config.Instance.MessageDownloadSuccess2.Replace("%s", requester));
                 }
             }
             catch (Exception e)
@@ -391,21 +392,20 @@ namespace wipbot
             {
                 if (latestDownloadedSongPath != null)
                 {
-                    SongCore.Data.SongData sd = SongCore.Loader.Instance.LoadCustomLevelSongData(latestDownloadedSongPath);
-                    CustomPreviewBeatmapLevel cl = SongCore.Loader.LoadSong(sd.SaveData, latestDownloadedSongPath, out string hash);
+                    var (_,lvl) = SongCore.Loader.LoadCustomLevel(latestDownloadedSongPath).Value;
                     latestDownloadedSongPath = null;
                     SegmentedControl control = categoryController.transform.Find("HorizontalIconSegmentedControl").GetComponent<IconSegmentedControl>();
                     control.SelectCellWithNumber(3);
                     MethodInfo method = typeof(SelectLevelCategoryViewController).GetMethod("LevelFilterCategoryIconSegmentedControlDidSelectCell", BindingFlags.Instance | BindingFlags.NonPublic);
                     object[] args = { control, 3 };
                     method.Invoke(categoryController, args);
-                    searchController.ResetFilterParams(false);
+                    searchController.ResetFilter(false);
                     yield return new WaitForSeconds(0.5f);
-                    foreach (IBeatmapLevelPack levelPack in beatmapLevelsModel.allLoadedBeatmapLevelPackCollection.beatmapLevelPacks)
+                    foreach (BeatmapLevelPack levelPack in SongCore.Loader.CustomLevelsRepository.beatmapLevelPacks)
                     {
-                        foreach (IPreviewBeatmapLevel level in levelPack.beatmapLevelCollection.beatmapLevels)
+                        foreach (BeatmapLevel level in levelPack.beatmapLevels)
                         {
-                            if (level.levelID.StartsWith("custom_level_" + hash))
+                            if (level.levelID.StartsWith("custom_level_" + lvl.levelID.Split('_')[2]))
                             {
                                 navigationController.SelectLevel(level);
                                 yield break;
@@ -415,7 +415,7 @@ namespace wipbot
                 }
             }
         }
-        
+
         public class WipbotButtonController : BeatSaberMarkupLanguage.Util.NotifiableSingleton<WipbotButtonController>
         {
             [UIComponent("gray-button")]
@@ -462,8 +462,8 @@ namespace wipbot
                 if (grayButtonTransform != null) return;
                 BSMLParser.instance.Parse(
                     "<bg xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance' xsi:schemaLocation='https://monkeymanboy.github.io/BSML-Docs/ https://raw.githubusercontent.com/monkeymanboy/BSML-Docs/gh-pages/BSMLSchema.xsd'>" +
-                    "<button id='gray-button' active='~gray-button-active' text='wip' font-size='3' on-click='gray-button-click' anchor-pos-x='"+Config.Instance.ButtonPositionX+"' anchor-pos-y='"+Config.Instance.ButtonPositionY+"' pref-height='6' pref-width='11' />" +
-                    "<action-button id='blue-button' active='~blue-button-active' text='~blue-button-text' hover-hint='~blue-button-hint' word-wrapping='false' font-size='3' on-click='blue-button-click' anchor-pos-x='"+(Config.Instance.ButtonPositionX-80)+"' anchor-pos-y='"+(Config.Instance.ButtonPositionY+3)+"' pref-height='6' pref-width='11' />" +
+                    "<button id='gray-button' active='~gray-button-active' text='wip' font-size='3' on-click='gray-button-click' anchor-pos-x='" + Config.Instance.ButtonPositionX + "' anchor-pos-y='" + (Config.Instance.ButtonPositionY + 2) + "' pref-height='6' pref-width='11' />" +
+                    "<action-button id='blue-button' active='~blue-button-active' text='~blue-button-text' hover-hint='~blue-button-hint' word-wrapping='false' font-size='3' on-click='blue-button-click' anchor-pos-x='" + (Config.Instance.ButtonPositionX - 80) + "' anchor-pos-y='" + (Config.Instance.ButtonPositionY + 5) + "' pref-height='6' pref-width='11' />" +
                     "</bg>"
                     , parent, this);
             }
@@ -485,13 +485,13 @@ namespace wipbot
             [UIAction("gray-button-click")]
             void GrayButtonPressed()
             {
-                
+
             }
 
             [UIAction("#post-parse")]
             private void PostParse()
             {
-                
+
             }
         }
 
@@ -500,9 +500,6 @@ namespace wipbot
         {
             [HarmonyPatch(typeof(LevelSelectionNavigationController), "DidActivate")]
             static void Postfix(LevelSelectionNavigationController __instance) { WipbotButtonController.instance.init(__instance.gameObject); }
-
-            [HarmonyPatch(typeof(BeatmapLevelsModel), "Init")]
-            static void Postfix(BeatmapLevelsModel __instance) { beatmapLevelsModel = __instance; }
 
             [HarmonyPatch(typeof(LevelCollectionNavigationController), "DidActivate")]
             static void Postfix(LevelCollectionNavigationController __instance) { navigationController = __instance; }
