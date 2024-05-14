@@ -9,7 +9,7 @@
   "dependsOn": {
     "BSIPA": "^4.0.5",
     "SongCore": "^3.0.0",
-    "BeatSaberMarkupLanguage": "^1.6.0"
+    "BeatSaberMarkupLanguage": "^1.8.0"
   },
   "loadAfter": [ "CatCore", "ChatPlexSDK_BS" ]
 }

@@ -18,7 +18,6 @@ using HMUI;
 using BeatSaberMarkupLanguage.Attributes;
 using System.Reflection;
 using IPA.Loader;
-using static IPA.Logging.Logger;
 
 [assembly: InternalsVisibleTo(GeneratedStore.AssemblyVisibilityTarget)]
 namespace wipbot
